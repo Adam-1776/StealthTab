@@ -16,36 +16,41 @@ A lightweight web browser wrapper for macOS built with SwiftUI and WebKit.
 - macOS 14.0 or later
 - Xcode 15.0 or later
 
-## Building & Running
+## Quick Start
 
 1. Open `StealthTab/StealthTab.xcodeproj` in Xcode
 2. Select your target device/Mac
-3. Press Cmd+R to build and run
+3. Press **Cmd+R** to build and run
+
+That's it! The browser will launch with Google as the home page.
 
 ## Usage
 
-- **Navigate**: Enter a URL or search term in the address bar and press Enter
-- **Go Back/Forward**: Click the chevron buttons or use trackpad gestures
-- **Reload**: Click the refresh button (becomes a stop button while loading)
-- **Home**: Click the house icon to return to Google
-- **Clear URL**: Click the X button in the address bar
+| Action | How To |
+|--------|--------|
+| **Navigate** | Enter a URL or search term in the address bar and press Enter |
+| **Go Back/Forward** | Click the chevron buttons or use trackpad swipe gestures |
+| **Reload/Stop** | Click the refresh button (becomes a stop button while loading) |
+| **Go Home** | Click the house icon to return to Google |
+| **Clear URL** | Click the X button in the address bar |
 
-## Architecture
+## Documentation
 
-The app consists of two main components:
-
-1. **StealthTabApp.swift** - Main app entry point with window configuration
-2. **ContentView.swift** - Browser UI with toolbar, controls, and WebKit integration
+📖 **For detailed technical documentation**, including architecture, code organization, and implementation details, see **[CODE_ORGANIZATION.md](CODE_ORGANIZATION.md)**.
 
 ## Future Enhancements
 
 - Multiple tab support
-- Bookmarks
-- History
+- Bookmarks and favorites
+- Browsing history
 - Download manager
-- Privacy/incognito mode
+- Private/incognito mode
 - Custom search engine options
-- Extension support
+- Safari extension support
+
+## Contributing
+
+This is a learning project demonstrating modern macOS app development with SwiftUI and WebKit.
 
 ## License
 
