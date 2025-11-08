@@ -36,8 +36,14 @@ struct ContentView: View {
             minHeight: BrowserConfig.minimumWindowHeight
         )
         .onChange(of: viewModel.activeTab?.urlString) { oldValue, newValue in
-            if let newValue = newValue {
+            if let newValue = newValue, !newValue.isEmpty {
                 viewModel.updateURLInput(from: newValue)
+            }
+        }
+        .onChange(of: viewModel.activeTabId) { oldValue, newValue in
+            // Update URL bar when switching tabs
+            if let tab = viewModel.activeTab {
+                viewModel.updateURLInput(from: tab.urlString)
             }
         }
         // Keyboard shortcuts

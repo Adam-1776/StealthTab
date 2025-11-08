@@ -111,19 +111,13 @@ class BrowserViewModel: ObservableObject {
     func loadURL(_ input: String) {
         guard let tab = activeTab else { return }
         
-        var urlToLoad = input.trimmingCharacters(in: .whitespaces)
-        
-        // If it doesn't look like a URL, treat it as a search query
-        if !urlToLoad.contains(".") || !urlToLoad.contains("://") {
-            urlToLoad = constructSearchURL(query: urlToLoad)
-        } else if !urlToLoad.hasPrefix("http://") && !urlToLoad.hasPrefix("https://") {
-            urlToLoad = "https://" + urlToLoad
-        }
+        let urlToLoad = Utils.processInput(input)
         
         if let url = URL(string: urlToLoad) {
             // Mark tab as no longer new
             tab.isNewTab = false
             tab.urlString = urlToLoad
+            urlInput = urlToLoad
             
             // Create WebView if it doesn't exist yet
             if tab.webView == nil {
@@ -136,12 +130,5 @@ class BrowserViewModel: ObservableObject {
     
     func updateURLInput(from urlString: String) {
         urlInput = urlString
-    }
-    
-    // MARK: - Private Helpers
-    
-    private func constructSearchURL(query: String) -> String {
-        let searchQuery = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-        return BrowserConfig.searchEngineURL + searchQuery
     }
 }
