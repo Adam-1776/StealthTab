@@ -25,6 +25,7 @@ struct TabBarView: View {
                         )
                     }
                 }
+                .padding(.leading, 8)
             }
             
             // New Tab Button
@@ -103,11 +104,11 @@ struct TabItem: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isActive ? Color(nsColor: .controlBackgroundColor) : (isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.5) : Color.clear))
+                    .fill(isActive ? Color.clear : (isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor)))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isActive ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                    .stroke(Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
             .onTapGesture(perform: onSelect)
