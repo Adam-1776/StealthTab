@@ -36,17 +36,28 @@ That's it! The browser will launch with Google as the home page.
 
 ## Documentation
 
-📖 **For detailed technical documentation**, including architecture, code organization, and implementation details, see **[CODE_ORGANIZATION.md](CODE_ORGANIZATION.md)**.
+📖 **Technical Documentation:**
+- **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** - Project organization and architecture overview
+- **[CODE_ORGANIZATION.md](CODE_ORGANIZATION.md)** - Detailed code implementation and design patterns
+
+## Features Implemented
+
+- ✅ Multiple tab support with tab bar
+- ✅ New tab screen with quick links
+- ✅ Smart URL detection (URLs vs search queries)
+- ✅ Keyboard shortcuts (Cmd+T, Cmd+W, Cmd+1-9, etc.)
+- ✅ Tab persistence (no reload on switch)
+- ✅ Professional UI with hover effects
 
 ## Future Enhancements
 
-- Multiple tab support
 - Bookmarks and favorites
 - Browsing history
 - Download manager
 - Private/incognito mode
 - Custom search engine options
 - Safari extension support
+- Session restore
 
 ## Contributing
 
