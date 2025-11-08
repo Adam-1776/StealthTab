@@ -11,6 +11,9 @@ struct TabBarView: View {
     @ObservedObject var viewModel: BrowserViewModel
     @State private var isNewTabHovering = false
     
+    static let tabBarColor = Color(red: 0.15, green: 0.15, blue: 0.15)
+    static let toolBarColor = Color(red: 0.25, green: 0.25, blue: 0.25)
+    
     var body: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -47,8 +50,8 @@ struct TabBarView: View {
             .padding(.horizontal, 6)
         }
         .frame(height: 36)
-        //.background(Color(red: 0.80, green: 0.80, blue: 0.80))
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Self.tabBarColor)
+        //.background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
@@ -104,7 +107,8 @@ struct TabItem: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isActive ? Color.clear : (isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor)))
+                    //.fill(isActive ? Color.clear : (isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : Color(nsColor: .controlBackgroundColor)))
+                    .fill(isActive ? TabBarView.toolBarColor : (isHovering ? Color(nsColor: .controlBackgroundColor).opacity(0.8) : TabBarView.tabBarColor))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 6)
