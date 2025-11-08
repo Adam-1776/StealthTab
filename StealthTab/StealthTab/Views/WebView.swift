@@ -10,17 +10,19 @@ import WebKit
 
 struct WebView: NSViewRepresentable {
     @ObservedObject var tab: Tab
+    var onPageLoaded: ((String, String) -> Void)?
     
     // MARK: - NSViewRepresentable
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(tab: tab)
+        Coordinator(tab: tab, onPageLoaded: onPageLoaded)
     }
     
     func makeNSView(context: Context) -> WKWebView {
         // Reuse existing webView if available (prevents reload on tab switch)
         if let existingWebView = tab.webView {
             existingWebView.navigationDelegate = context.coordinator
+            context.coordinator.setupURLObserver(for: existingWebView)
             return existingWebView
         }
         
@@ -43,6 +45,9 @@ struct WebView: NSViewRepresentable {
         // Store reference to webView in tab
         tab.webView = webView
         
+        // Setup URL observer for JavaScript navigation (e.g., YouTube)
+        context.coordinator.setupURLObserver(for: webView)
+        
         // Load initial URL if not empty
         if !tab.urlString.isEmpty, let url = URL(string: tab.urlString) {
             webView.load(URLRequest(url: url))
@@ -59,9 +64,50 @@ struct WebView: NSViewRepresentable {
     
     class Coordinator: NSObject, WKNavigationDelegate {
         var tab: Tab
+        var onPageLoaded: ((String, String) -> Void)?
+        var urlObserver: NSKeyValueObservation?
+        var loadingObserver: NSKeyValueObservation?
         
-        init(tab: Tab) {
+        init(tab: Tab, onPageLoaded: ((String, String) -> Void)?) {
             self.tab = tab
+            self.onPageLoaded = onPageLoaded
+        }
+        
+        func setupURLObserver(for webView: WKWebView) {
+            // Observe URL changes (catches JavaScript navigation like YouTube)
+            urlObserver = webView.observe(\.url, options: [.new]) { [weak self] webView, change in
+                guard let self = self,
+                      let url = change.newValue as? URL else { return }
+                
+                let urlString = url.absoluteString
+                
+                Task { @MainActor in
+                    // Update tab's URL
+                    if self.tab.urlString != urlString {
+                        self.tab.urlString = urlString
+                        
+                        // Update title if available
+                        if let title = webView.title, !title.isEmpty {
+                            self.tab.title = title
+                        }
+                    }
+                }
+            }
+            
+            // Observe loading state (ensures loading indicator stays in sync)
+            loadingObserver = webView.observe(\.isLoading, options: [.new]) { [weak self] webView, change in
+                guard let self = self,
+                      let isLoading = change.newValue else { return }
+                
+                Task { @MainActor in
+                    self.tab.isLoading = isLoading
+                }
+            }
+        }
+        
+        deinit {
+            urlObserver?.invalidate()
+            loadingObserver?.invalidate()
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -74,6 +120,12 @@ struct WebView: NSViewRepresentable {
             Task { @MainActor in
                 tab.isLoading = false
                 tab.updateFromWebView(webView)
+                
+                // Add to history
+                if let url = webView.url?.absoluteString,
+                   let title = webView.title {
+                    onPageLoaded?(url, title)
+                }
             }
         }
         

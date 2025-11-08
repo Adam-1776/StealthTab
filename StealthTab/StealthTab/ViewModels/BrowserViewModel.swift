@@ -8,6 +8,7 @@
 import SwiftUI
 import WebKit
 import Combine
+import AppKit
 
 @MainActor
 class BrowserViewModel: ObservableObject {
@@ -16,6 +17,15 @@ class BrowserViewModel: ObservableObject {
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
     @Published var urlInput: String = ""
+    @Published var showHistory: Bool = false
+    
+    // MARK: - History Manager
+    
+    let historyManager = HistoryManager()
+    
+    // MARK: - Private Properties
+    
+    private var tabObservers: [UUID: AnyCancellable] = [:]
     
     // MARK: - Computed Properties
     
@@ -33,6 +43,7 @@ class BrowserViewModel: ObservableObject {
             isNewTab: false
         )
         tabs.append(initialTab)
+        observeTab(initialTab)
         activeTabId = initialTab.id
         urlInput = initialTab.urlString
     }
@@ -42,6 +53,7 @@ class BrowserViewModel: ObservableObject {
     func createNewTab() {
         let newTab = Tab(isNewTab: true)
         tabs.append(newTab)
+        observeTab(newTab)
         switchToTab(newTab.id)
     }
     
@@ -68,6 +80,10 @@ class BrowserViewModel: ObservableObject {
                 switchToTab(tabs[index + 1].id)
             }
         }
+        
+        // Remove observer
+        tabObservers[tabId]?.cancel()
+        tabObservers.removeValue(forKey: tabId)
         
         tabs.remove(at: index)
     }
@@ -130,5 +146,41 @@ class BrowserViewModel: ObservableObject {
     
     func updateURLInput(from urlString: String) {
         urlInput = urlString
+    }
+    
+    // MARK: - History Management
+    
+    func addToHistory(url: String, title: String) {
+        historyManager.addItem(url: url, title: title)
+    }
+    
+    func openHistoryWindow() {
+        showHistory = true
+    }
+    
+    func clearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear All History?"
+        alert.informativeText = "This will permanently delete your browsing history. This action cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear History")
+        alert.addButton(withTitle: "Cancel")
+        
+        if alert.runModal() == .alertFirstButtonReturn {
+            historyManager.clearHistory()
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func observeTab(_ tab: Tab) {
+        let observer = tab.$urlString
+            .sink { [weak self] urlString in
+                guard let self = self,
+                      tab.id == self.activeTabId,
+                      !urlString.isEmpty else { return }
+                self.urlInput = urlString
+            }
+        tabObservers[tab.id] = observer
     }
 }

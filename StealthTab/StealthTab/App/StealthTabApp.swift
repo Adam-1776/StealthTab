@@ -16,9 +16,44 @@ struct StealthTabApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {
-                // These will be handled by the ContentView when it has focus
-                // but we define them here for menu bar consistency
+                // Handled by ContentView
             }
+            
+            HistoryCommands()
         }
+    }
+}
+
+struct HistoryCommands: Commands {
+    @FocusedValue(\.browserViewModel) var viewModel: BrowserViewModel?
+    
+    var body: some Commands {
+        CommandMenu("History") {
+            Button("Show Full History") {
+                viewModel?.openHistoryWindow()
+            }
+            .keyboardShortcut("y", modifiers: .command)
+            .disabled(viewModel == nil)
+            
+            Divider()
+            
+            Button("Clear History...") {
+                viewModel?.clearHistory()
+            }
+            .disabled(viewModel == nil)
+        }
+    }
+}
+
+// MARK: - Focused Values
+
+struct BrowserViewModelKey: FocusedValueKey {
+    typealias Value = BrowserViewModel
+}
+
+extension FocusedValues {
+    var browserViewModel: BrowserViewModel? {
+        get { self[BrowserViewModelKey.self] }
+        set { self[BrowserViewModelKey.self] = newValue }
     }
 }

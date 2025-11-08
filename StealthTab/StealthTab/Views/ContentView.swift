@@ -24,8 +24,10 @@ struct ContentView: View {
                     NewTabView { url in
                         viewModel.loadURL(url)
                     }
+                    .id(activeTab.id)
                 } else {
-                    BrowserWebView(tab: activeTab)
+                    BrowserWebView(tab: activeTab, viewModel: viewModel)
+                        .id(activeTab.id)
                 }
             } else {
                 EmptyStateView()
@@ -35,11 +37,6 @@ struct ContentView: View {
             minWidth: BrowserConfig.minimumWindowWidth,
             minHeight: BrowserConfig.minimumWindowHeight
         )
-        .onChange(of: viewModel.activeTab?.urlString) { oldValue, newValue in
-            if let newValue = newValue, !newValue.isEmpty {
-                viewModel.updateURLInput(from: newValue)
-            }
-        }
         .onChange(of: viewModel.activeTabId) { oldValue, newValue in
             // Update URL bar when switching tabs
             if let tab = viewModel.activeTab {
@@ -52,6 +49,12 @@ struct ContentView: View {
                 handleKeyPress(event)
             }
         }
+        .sheet(isPresented: $viewModel.showHistory) {
+            HistoryView(historyManager: viewModel.historyManager) { url in
+                viewModel.loadURL(url)
+            }
+        }
+        .focusedSceneValue(\.browserViewModel, viewModel)
     }
     
     private func handleKeyPress(_ event: NSEvent) -> NSEvent? {
@@ -273,9 +276,12 @@ struct ClearButton: View {
 
 struct BrowserWebView: View {
     @ObservedObject var tab: Tab
+    @ObservedObject var viewModel: BrowserViewModel
     
     var body: some View {
-        WebView(tab: tab)
+        WebView(tab: tab) { url, title in
+            viewModel.addToHistory(url: url, title: title)
+        }
     }
 }
 
