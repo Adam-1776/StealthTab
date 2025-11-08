@@ -13,36 +13,88 @@ import Combine
 class BrowserViewModel: ObservableObject {
     // MARK: - Published Properties
     
-    @Published var urlString: String
-    @Published var urlInput: String
-    @Published var canGoBack: Bool = false
-    @Published var canGoForward: Bool = false
-    @Published var isLoading: Bool = false
-    @Published var pageTitle: String = ""
-    @Published var webView: WKWebView?
+    @Published var tabs: [Tab] = []
+    @Published var activeTabId: UUID?
+    @Published var urlInput: String = ""
+    
+    // MARK: - Computed Properties
+    
+    var activeTab: Tab? {
+        guard let activeTabId = activeTabId else { return nil }
+        return tabs.first { $0.id == activeTabId }
+    }
     
     // MARK: - Initialization
     
     init() {
-        self.urlString = BrowserConfig.defaultHomeURL
-        self.urlInput = BrowserConfig.defaultHomeURL
+        // Create initial tab with Google loaded
+        let initialTab = Tab(
+            urlString: BrowserConfig.defaultHomeURL,
+            isNewTab: false
+        )
+        tabs.append(initialTab)
+        activeTabId = initialTab.id
+        urlInput = initialTab.urlString
+    }
+    
+    // MARK: - Tab Management
+    
+    func createNewTab() {
+        let newTab = Tab(isNewTab: true)
+        tabs.append(newTab)
+        switchToTab(newTab.id)
+    }
+    
+    func closeTab(_ tabId: UUID) {
+        guard tabs.count > 1 else {
+            // Don't close the last tab, just reset it to new tab state
+            if let lastTab = tabs.first {
+                lastTab.urlString = ""
+                lastTab.title = "New Tab"
+                lastTab.isNewTab = true
+                lastTab.webView = nil
+                urlInput = ""
+            }
+            return
+        }
+        
+        guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
+        
+        // If closing active tab, switch to another one
+        if tabId == activeTabId {
+            if index > 0 {
+                switchToTab(tabs[index - 1].id)
+            } else if index < tabs.count - 1 {
+                switchToTab(tabs[index + 1].id)
+            }
+        }
+        
+        tabs.remove(at: index)
+    }
+    
+    func switchToTab(_ tabId: UUID) {
+        activeTabId = tabId
+        if let tab = activeTab {
+            urlInput = tab.urlString
+        }
     }
     
     // MARK: - Navigation Actions
     
     func goBack() {
-        webView?.goBack()
+        activeTab?.webView?.goBack()
     }
     
     func goForward() {
-        webView?.goForward()
+        activeTab?.webView?.goForward()
     }
     
     func reload() {
-        if isLoading {
-            webView?.stopLoading()
+        guard let tab = activeTab else { return }
+        if tab.isLoading {
+            tab.webView?.stopLoading()
         } else {
-            webView?.reload()
+            tab.webView?.reload()
         }
     }
     
@@ -57,6 +109,8 @@ class BrowserViewModel: ObservableObject {
     // MARK: - URL Loading
     
     func loadURL(_ input: String) {
+        guard let tab = activeTab else { return }
+        
         var urlToLoad = input.trimmingCharacters(in: .whitespaces)
         
         // If it doesn't look like a URL, treat it as a search query
@@ -67,8 +121,16 @@ class BrowserViewModel: ObservableObject {
         }
         
         if let url = URL(string: urlToLoad) {
-            webView?.load(URLRequest(url: url))
-            urlString = urlToLoad
+            // Mark tab as no longer new
+            tab.isNewTab = false
+            tab.urlString = urlToLoad
+            
+            // Create WebView if it doesn't exist yet
+            if tab.webView == nil {
+                // WebView will be created when the view updates
+            } else {
+                tab.webView?.load(URLRequest(url: url))
+            }
         }
     }
     
@@ -83,4 +145,3 @@ class BrowserViewModel: ObservableObject {
         return BrowserConfig.searchEngineURL + searchQuery
     }
 }
-

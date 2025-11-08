@@ -9,17 +9,12 @@ import SwiftUI
 import WebKit
 
 struct WebView: NSViewRepresentable {
-    @Binding var urlString: String
-    @Binding var canGoBack: Bool
-    @Binding var canGoForward: Bool
-    @Binding var isLoading: Bool
-    @Binding var pageTitle: String
-    @Binding var webView: WKWebView?
+    @ObservedObject var tab: Tab
     
     // MARK: - NSViewRepresentable
     
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(tab: tab)
     }
     
     func makeNSView(context: Context) -> WKWebView {
@@ -38,14 +33,12 @@ struct WebView: NSViewRepresentable {
         // Set a desktop User-Agent to ensure proper rendering
         webView.customUserAgent = BrowserConfig.desktopUserAgent
         
-        // Load initial URL
-        if let url = URL(string: urlString) {
-            webView.load(URLRequest(url: url))
-        }
+        // Store reference to webView in tab
+        tab.webView = webView
         
-        // Store reference to webView
-        DispatchQueue.main.async {
-            self.webView = webView
+        // Load initial URL
+        if let url = URL(string: tab.urlString) {
+            webView.load(URLRequest(url: url))
         }
         
         return webView
@@ -58,37 +51,36 @@ struct WebView: NSViewRepresentable {
     // MARK: - Coordinator
     
     class Coordinator: NSObject, WKNavigationDelegate {
-        var parent: WebView
+        var tab: Tab
         
-        init(_ parent: WebView) {
-            self.parent = parent
+        init(tab: Tab) {
+            self.tab = tab
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
-            parent.isLoading = true
+            Task { @MainActor in
+                tab.isLoading = true
+            }
         }
         
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            parent.isLoading = false
-            parent.canGoBack = webView.canGoBack
-            parent.canGoForward = webView.canGoForward
-            
-            if let url = webView.url?.absoluteString {
-                parent.urlString = url
-            }
-            
-            if let title = webView.title {
-                parent.pageTitle = title
+            Task { @MainActor in
+                tab.isLoading = false
+                tab.updateFromWebView(webView)
             }
         }
         
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            parent.isLoading = false
+            Task { @MainActor in
+                tab.isLoading = false
+            }
             print("Navigation failed: \(error.localizedDescription)")
         }
         
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            parent.isLoading = false
+            Task { @MainActor in
+                tab.isLoading = false
+            }
             print("Provisional navigation failed: \(error.localizedDescription)")
         }
         
@@ -97,4 +89,3 @@ struct WebView: NSViewRepresentable {
         }
     }
 }
-

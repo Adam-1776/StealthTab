@@ -15,12 +15,9 @@ struct StealthTabApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
-            // Add custom commands for browser functionality
             CommandGroup(replacing: .newItem) {
-                Button("New Tab") {
-                    // This could be extended to support multiple tabs
-                }
-                .keyboardShortcut("t", modifiers: .command)
+                // These will be handled by the ContentView when it has focus
+                // but we define them here for menu bar consistency
             }
         }
     }

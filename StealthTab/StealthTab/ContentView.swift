@@ -10,20 +10,112 @@ import WebKit
 
 struct ContentView: View {
     @StateObject private var viewModel = BrowserViewModel()
+    @FocusState private var isURLBarFocused: Bool
     
     var body: some View {
         VStack(spacing: 0) {
+            TabBarView(viewModel: viewModel)
+            Divider()
             BrowserToolbar(viewModel: viewModel)
             Divider()
-            BrowserWebView(viewModel: viewModel)
+            
+            if let activeTab = viewModel.activeTab {
+                if activeTab.isNewTab {
+                    NewTabView { url in
+                        viewModel.loadURL(url)
+                    }
+                } else {
+                    BrowserWebView(tab: activeTab)
+                }
+            } else {
+                EmptyStateView()
+            }
         }
         .frame(
             minWidth: BrowserConfig.minimumWindowWidth,
             minHeight: BrowserConfig.minimumWindowHeight
         )
-        .onChange(of: viewModel.urlString) { oldValue, newValue in
-            viewModel.updateURLInput(from: newValue)
+        .onChange(of: viewModel.activeTab?.urlString) { oldValue, newValue in
+            if let newValue = newValue {
+                viewModel.updateURLInput(from: newValue)
+            }
         }
+        // Keyboard shortcuts
+        .onAppear {
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                handleKeyPress(event)
+            }
+        }
+    }
+    
+    private func handleKeyPress(_ event: NSEvent) -> NSEvent? {
+        // Cmd+T - New Tab
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "t" {
+            viewModel.createNewTab()
+            return nil
+        }
+        
+        // Cmd+W - Close Tab
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "w" {
+            if let activeTabId = viewModel.activeTabId {
+                viewModel.closeTab(activeTabId)
+            }
+            return nil
+        }
+        
+        // Cmd+L - Focus URL bar
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "l" {
+            isURLBarFocused = true
+            return nil
+        }
+        
+        // Cmd+R - Reload
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "r" {
+            viewModel.reload()
+            return nil
+        }
+        
+        // Cmd+[ - Back
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "[" {
+            viewModel.goBack()
+            return nil
+        }
+        
+        // Cmd+] - Forward
+        if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "]" {
+            viewModel.goForward()
+            return nil
+        }
+        
+        // Cmd+1 through Cmd+9 - Switch to tab by index
+        if event.modifierFlags.contains(.command), 
+           let char = event.charactersIgnoringModifiers?.first,
+           let digit = Int(String(char)),
+           digit >= 1 && digit <= 9 {
+            let index = digit - 1
+            if index < viewModel.tabs.count {
+                viewModel.switchToTab(viewModel.tabs[index].id)
+            }
+            return nil
+        }
+        
+        return event
+    }
+}
+
+// MARK: - Empty State
+
+struct EmptyStateView: View {
+    var body: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "globe")
+                .font(.system(size: 48))
+                .foregroundColor(.secondary)
+            Text("No Active Tab")
+                .font(.title2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -49,13 +141,25 @@ struct BrowserToolbar: View {
 struct NavigationButtons: View {
     @ObservedObject var viewModel: BrowserViewModel
     
+    var canGoBack: Bool {
+        viewModel.activeTab?.canGoBack ?? false
+    }
+    
+    var canGoForward: Bool {
+        viewModel.activeTab?.canGoForward ?? false
+    }
+    
+    var isLoading: Bool {
+        viewModel.activeTab?.isLoading ?? false
+    }
+    
     var body: some View {
         Group {
             // Back button
             NavigationButton(
                 iconName: "chevron.left",
                 action: viewModel.goBack,
-                isEnabled: viewModel.canGoBack,
+                isEnabled: canGoBack,
                 tooltip: "Go Back"
             )
             
@@ -63,16 +167,16 @@ struct NavigationButtons: View {
             NavigationButton(
                 iconName: "chevron.right",
                 action: viewModel.goForward,
-                isEnabled: viewModel.canGoForward,
+                isEnabled: canGoForward,
                 tooltip: "Go Forward"
             )
             
             // Reload/Stop button
             NavigationButton(
-                iconName: viewModel.isLoading ? "xmark" : "arrow.clockwise",
+                iconName: isLoading ? "xmark" : "arrow.clockwise",
                 action: viewModel.reload,
                 isEnabled: true,
-                tooltip: viewModel.isLoading ? "Stop Loading" : "Reload"
+                tooltip: isLoading ? "Stop Loading" : "Reload"
             )
         }
     }
@@ -102,9 +206,13 @@ struct NavigationButton: View {
 struct URLBar: View {
     @ObservedObject var viewModel: BrowserViewModel
     
+    var isLoading: Bool {
+        viewModel.activeTab?.isLoading ?? false
+    }
+    
     var body: some View {
         HStack(spacing: 8) {
-            URLBarIcon(isLoading: viewModel.isLoading)
+            URLBarIcon(isLoading: isLoading)
             URLTextField(viewModel: viewModel)
             
             if !viewModel.urlInput.isEmpty {
@@ -174,17 +282,10 @@ struct HomeButton: View {
 // MARK: - Browser Web View
 
 struct BrowserWebView: View {
-    @ObservedObject var viewModel: BrowserViewModel
+    @ObservedObject var tab: Tab
     
     var body: some View {
-        WebView(
-            urlString: $viewModel.urlString,
-            canGoBack: $viewModel.canGoBack,
-            canGoForward: $viewModel.canGoForward,
-            isLoading: $viewModel.isLoading,
-            pageTitle: $viewModel.pageTitle,
-            webView: $viewModel.webView
-        )
+        WebView(tab: tab)
     }
 }
 
