@@ -134,7 +134,6 @@ struct BrowserToolbar: View {
         HStack(spacing: BrowserConfig.toolbarSpacing) {
             NavigationButtons(viewModel: viewModel)
             URLBar(viewModel: viewModel)
-            HomeButton(viewModel: viewModel)
         }
         .padding(.horizontal, BrowserConfig.toolbarHorizontalPadding)
         .padding(.vertical, BrowserConfig.toolbarVerticalPadding)
@@ -269,21 +268,6 @@ struct ClearButton: View {
     }
 }
 
-// MARK: - Home Button
-
-struct HomeButton: View {
-    @ObservedObject var viewModel: BrowserViewModel
-    
-    var body: some View {
-        Button(action: viewModel.goHome) {
-            Image(systemName: "house.fill")
-                .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
-                .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
-        }
-        .buttonStyle(.plain)
-        .help("Home")
-    }
-}
 
 // MARK: - Browser Web View
 
