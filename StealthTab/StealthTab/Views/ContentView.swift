@@ -140,6 +140,7 @@ struct BrowserToolbar: View {
         }
         .padding(.horizontal, BrowserConfig.toolbarHorizontalPadding)
         .padding(.vertical, BrowserConfig.toolbarVerticalPadding)
+        //.background(Color(red: 0.80, green: 0.80, blue: 0.80))
         .background(Color(nsColor: .windowBackgroundColor))
     }
 }
