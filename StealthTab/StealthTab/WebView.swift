@@ -18,6 +18,13 @@ struct WebView: NSViewRepresentable {
     }
     
     func makeNSView(context: Context) -> WKWebView {
+        // Reuse existing webView if available (prevents reload on tab switch)
+        if let existingWebView = tab.webView {
+            existingWebView.navigationDelegate = context.coordinator
+            return existingWebView
+        }
+        
+        // Create new webView only if it doesn't exist
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .default()
         
@@ -36,8 +43,8 @@ struct WebView: NSViewRepresentable {
         // Store reference to webView in tab
         tab.webView = webView
         
-        // Load initial URL
-        if let url = URL(string: tab.urlString) {
+        // Load initial URL if not empty
+        if !tab.urlString.isEmpty, let url = URL(string: tab.urlString) {
             webView.load(URLRequest(url: url))
         }
         
