@@ -66,6 +66,7 @@ struct WebView: NSViewRepresentable {
         var tab: Tab
         var onPageLoaded: ((String, String) -> Void)?
         var urlObserver: NSKeyValueObservation?
+        var titleObserver: NSKeyValueObservation?
         var loadingObserver: NSKeyValueObservation?
         var canGoBackObserver: NSKeyValueObservation?
         var canGoForwardObserver: NSKeyValueObservation?
@@ -87,11 +88,20 @@ struct WebView: NSViewRepresentable {
                     // Update tab's URL
                     if self.tab.urlString != urlString {
                         self.tab.urlString = urlString
-                        
-                        // Update title if available
-                        if let title = webView.title, !title.isEmpty {
-                            self.tab.title = title
-                        }
+                    }
+                }
+            }
+            
+            // Observe title changes (ensures title updates correctly on back/forward navigation)
+            titleObserver = webView.observe(\.title, options: [.new, .initial]) { [weak self] webView, change in
+                guard let self = self,
+                      let title = change.newValue as? String,
+                      !title.isEmpty else { return }
+                
+                Task { @MainActor in
+                    // Update tab's title whenever it changes
+                    if self.tab.title != title {
+                        self.tab.title = title
                     }
                 }
             }
@@ -124,6 +134,7 @@ struct WebView: NSViewRepresentable {
         
         deinit {
             urlObserver?.invalidate()
+            titleObserver?.invalidate()
             loadingObserver?.invalidate()
             canGoBackObserver?.invalidate()
             canGoForwardObserver?.invalidate()
