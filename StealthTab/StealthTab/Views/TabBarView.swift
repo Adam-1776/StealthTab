@@ -39,8 +39,8 @@ struct TabBarView: View {
     }
     
     static var tabHoveringColor: Color {
-        // Subtle hover effect using window background (slightly different from control background)
-        Color(nsColor: .windowBackgroundColor)
+        // More visible hover effect using selected content background with low opacity
+        Color(nsColor: .selectedContentBackgroundColor).opacity(0.3)
     }
     
     static var toolBarColor: Color {
@@ -147,7 +147,7 @@ struct TabItem: View {
                     // Hover overlay for visible feedback
                     if isHovering && !isActive {
                         TopRoundedRectangle(cornerRadius: 7)
-                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.15))
+                            .fill(TabBarView.tabHoveringColor)
                     }
                 }
             )
