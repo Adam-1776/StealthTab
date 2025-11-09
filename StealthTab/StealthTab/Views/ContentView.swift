@@ -196,16 +196,26 @@ struct NavigationButton: View {
     let isEnabled: Bool
     let tooltip: String
     
+    @State private var isHovering = false
+    
     var body: some View {
         Button(action: action) {
             Image(systemName: iconName)
                 .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
+                .foregroundColor(isHovering && isEnabled ? .accentColor : .primary)
                 .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isHovering && isEnabled ? Color(nsColor: .selectedContentBackgroundColor).opacity(0.2) : Color.clear)
+                )
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1.0 : 0.3)
         .help(tooltip)
+        .onHover { hovering in
+            isHovering = hovering
+        }
     }
 }
 
