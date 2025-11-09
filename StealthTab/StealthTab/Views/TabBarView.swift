@@ -7,13 +7,46 @@
 
 import SwiftUI
 
+// Custom shape that only rounds the top corners
+struct TopRoundedRectangle: Shape {
+    var cornerRadius: CGFloat
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        
+        path.move(to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - cornerRadius, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + cornerRadius),
+                         control: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cornerRadius))
+        path.addQuadCurve(to: CGPoint(x: rect.minX + cornerRadius, y: rect.minY),
+                         control: CGPoint(x: rect.minX, y: rect.minY))
+        path.closeSubpath()
+        
+        return path
+    }
+}
+
 struct TabBarView: View {
     @ObservedObject var viewModel: BrowserViewModel
     @State private var isNewTabHovering = false
     
-    static let tabBarColor = Color(red: 0.15, green: 0.15, blue: 0.15)
-    static let tabHoveringColor = Color(red: 0.20, green: 0.20, blue: 0.20)
-    static let toolBarColor = Color(red: 0.25, green: 0.25, blue: 0.25)
+    // Adaptive colors that work in both light and dark mode
+    static var tabBarColor: Color {
+        Color(nsColor: .controlBackgroundColor)
+    }
+    
+    static var tabHoveringColor: Color {
+        // Subtle hover effect using window background (slightly different from control background)
+        Color(nsColor: .windowBackgroundColor)
+    }
+    
+    static var toolBarColor: Color {
+        // Active tab uses unemphasized selected background
+        Color(nsColor: .unemphasizedSelectedContentBackgroundColor)
+    }
     
     var body: some View {
         HStack(spacing: 0) {
@@ -104,13 +137,22 @@ struct TabItem: View {
                 .opacity((isHovering || isActive) ? 1.0 : 0.0)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.top, 6)
+            .padding(.bottom, 6)
             .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isActive ? TabBarView.toolBarColor : (isHovering ? TabBarView.tabHoveringColor : TabBarView.tabBarColor))
+                ZStack {
+                    TopRoundedRectangle(cornerRadius: 7)
+                        .fill(isActive ? TabBarView.toolBarColor : TabBarView.tabBarColor)
+                    
+                    // Hover overlay for visible feedback
+                    if isHovering && !isActive {
+                        TopRoundedRectangle(cornerRadius: 7)
+                            .fill(Color(nsColor: .quaternaryLabelColor).opacity(0.15))
+                    }
+                }
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 6)
+                TopRoundedRectangle(cornerRadius: 7)
                     .stroke(Color.clear, lineWidth: 1)
             )
             .contentShape(Rectangle())
