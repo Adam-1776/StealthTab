@@ -67,6 +67,8 @@ struct WebView: NSViewRepresentable {
         var onPageLoaded: ((String, String) -> Void)?
         var urlObserver: NSKeyValueObservation?
         var loadingObserver: NSKeyValueObservation?
+        var canGoBackObserver: NSKeyValueObservation?
+        var canGoForwardObserver: NSKeyValueObservation?
         
         init(tab: Tab, onPageLoaded: ((String, String) -> Void)?) {
             self.tab = tab
@@ -75,7 +77,7 @@ struct WebView: NSViewRepresentable {
         
         func setupURLObserver(for webView: WKWebView) {
             // Observe URL changes (catches JavaScript navigation like YouTube)
-            urlObserver = webView.observe(\.url, options: [.new]) { [weak self] webView, change in
+            urlObserver = webView.observe(\.url, options: [.new, .initial]) { [weak self] webView, change in
                 guard let self = self,
                       let url = change.newValue as? URL else { return }
                 
@@ -95,7 +97,7 @@ struct WebView: NSViewRepresentable {
             }
             
             // Observe loading state (ensures loading indicator stays in sync)
-            loadingObserver = webView.observe(\.isLoading, options: [.new]) { [weak self] webView, change in
+            loadingObserver = webView.observe(\.isLoading, options: [.new, .initial]) { [weak self] webView, change in
                 guard let self = self,
                       let isLoading = change.newValue else { return }
                 
@@ -103,11 +105,28 @@ struct WebView: NSViewRepresentable {
                     self.tab.isLoading = isLoading
                 }
             }
+            
+            // Observe navigation state (canGoBack, canGoForward)
+            canGoBackObserver = webView.observe(\.canGoBack, options: [.new, .initial]) { [weak self] webView, change in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.tab.canGoBack = change.newValue ?? webView.canGoBack
+                }
+            }
+            
+            canGoForwardObserver = webView.observe(\.canGoForward, options: [.new, .initial]) { [weak self] webView, change in
+                guard let self = self else { return }
+                Task { @MainActor in
+                    self.tab.canGoForward = change.newValue ?? webView.canGoForward
+                }
+            }
         }
         
         deinit {
             urlObserver?.invalidate()
             loadingObserver?.invalidate()
+            canGoBackObserver?.invalidate()
+            canGoForwardObserver?.invalidate()
         }
         
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
