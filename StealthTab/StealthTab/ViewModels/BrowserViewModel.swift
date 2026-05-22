@@ -13,30 +13,55 @@ import AppKit
 @MainActor
 class BrowserViewModel: ObservableObject {
     // MARK: - Published Properties
-    
+
     @Published var tabs: [Tab] = []
     @Published var activeTabId: UUID?
     @Published var urlInput: String = ""
     @Published var showHistory: Bool = false
-    
+    @Published var isHiddenFromScreenCapture: Bool = UserDefaults.standard.object(forKey: BrowserPreferences.isHiddenFromScreenCapture) as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(isHiddenFromScreenCapture, forKey: BrowserPreferences.isHiddenFromScreenCapture)
+            applyWindowSettings()
+        }
+    }
+    @Published var windowOpacity: Double = UserDefaults.standard.object(forKey: BrowserPreferences.windowOpacity) as? Double ?? 1.0 {
+        didSet {
+            UserDefaults.standard.set(clampedWindowOpacity, forKey: BrowserPreferences.windowOpacity)
+            applyWindowSettings()
+        }
+    }
+    @Published var staysOnTop: Bool = UserDefaults.standard.object(forKey: BrowserPreferences.staysOnTop) as? Bool ?? false {
+        didSet {
+            UserDefaults.standard.set(staysOnTop, forKey: BrowserPreferences.staysOnTop)
+            applyWindowSettings()
+        }
+    }
+
     // MARK: - History Manager
-    
+
     let historyManager = HistoryManager()
-    
+
     // MARK: - Private Properties
-    
+
     private var tabObservers: [UUID: AnyCancellable] = [:]
-    
+    private weak var browserWindow: NSWindow?
+
     // MARK: - Computed Properties
-    
+
     var activeTab: Tab? {
         guard let activeTabId = activeTabId else { return nil }
         return tabs.first { $0.id == activeTabId }
     }
-    
+
+    private var clampedWindowOpacity: Double {
+        min(max(windowOpacity, BrowserConfig.minimumWindowOpacity), 1.0)
+    }
+
     // MARK: - Initialization
-    
+
     init() {
+        windowOpacity = clampedWindowOpacity
+
         // Create initial tab with Google loaded
         let initialTab = Tab(
             urlString: BrowserConfig.defaultHomeURL,
@@ -47,16 +72,16 @@ class BrowserViewModel: ObservableObject {
         activeTabId = initialTab.id
         urlInput = initialTab.urlString
     }
-    
+
     // MARK: - Tab Management
-    
+
     func createNewTab() {
         let newTab = Tab(isNewTab: true)
         tabs.append(newTab)
         observeTab(newTab)
         switchToTab(newTab.id)
     }
-    
+
     func closeTab(_ tabId: UUID) {
         guard tabs.count > 1 else {
             // Don't close the last tab, just reset it to new tab state
@@ -69,9 +94,9 @@ class BrowserViewModel: ObservableObject {
             }
             return
         }
-        
+
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return }
-        
+
         // If closing active tab, switch to another one
         if tabId == activeTabId {
             if index > 0 {
@@ -80,31 +105,31 @@ class BrowserViewModel: ObservableObject {
                 switchToTab(tabs[index + 1].id)
             }
         }
-        
+
         // Remove observer
         tabObservers[tabId]?.cancel()
         tabObservers.removeValue(forKey: tabId)
-        
+
         tabs.remove(at: index)
     }
-    
+
     func switchToTab(_ tabId: UUID) {
         activeTabId = tabId
         if let tab = activeTab {
             urlInput = tab.urlString
         }
     }
-    
+
     // MARK: - Navigation Actions
-    
+
     func goBack() {
         activeTab?.webView?.goBack()
     }
-    
+
     func goForward() {
         activeTab?.webView?.goForward()
     }
-    
+
     func reload() {
         guard let tab = activeTab else { return }
         if tab.isLoading {
@@ -113,28 +138,45 @@ class BrowserViewModel: ObservableObject {
             tab.webView?.reload()
         }
     }
-    
+
     func goHome() {
         loadURL(BrowserConfig.defaultHomeURL)
     }
-    
+
     func clearURLInput() {
         urlInput = ""
     }
-    
+
+    // MARK: - Window Privacy
+
+    func attachWindow(_ window: NSWindow?) {
+        guard let window = window else { return }
+
+        browserWindow = window
+        applyWindowSettings()
+    }
+
+    func toggleHiddenFromScreenCapture() {
+        isHiddenFromScreenCapture.toggle()
+    }
+
+    func toggleStaysOnTop() {
+        staysOnTop.toggle()
+    }
+
     // MARK: - URL Loading
-    
+
     func loadURL(_ input: String) {
         guard let tab = activeTab else { return }
-        
+
         let urlToLoad = Utils.processInput(input)
-        
+
         if let url = URL(string: urlToLoad) {
             // Mark tab as no longer new
             tab.isNewTab = false
             tab.urlString = urlToLoad
             urlInput = urlToLoad
-            
+
             // Create WebView if it doesn't exist yet
             if tab.webView == nil {
                 // WebView will be created when the view updates
@@ -143,21 +185,21 @@ class BrowserViewModel: ObservableObject {
             }
         }
     }
-    
+
     func updateURLInput(from urlString: String) {
         urlInput = urlString
     }
-    
+
     // MARK: - History Management
-    
+
     func addToHistory(url: String, title: String) {
         historyManager.addItem(url: url, title: title)
     }
-    
+
     func openHistoryWindow() {
         showHistory = true
     }
-    
+
     func clearHistory() {
         let alert = NSAlert()
         alert.messageText = "Clear All History?"
@@ -165,14 +207,14 @@ class BrowserViewModel: ObservableObject {
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Clear History")
         alert.addButton(withTitle: "Cancel")
-        
+
         if alert.runModal() == .alertFirstButtonReturn {
             historyManager.clearHistory()
         }
     }
-    
+
     // MARK: - Private Methods
-    
+
     private func observeTab(_ tab: Tab) {
         let observer = tab.$urlString
             .sink { [weak self] urlString in
@@ -183,4 +225,22 @@ class BrowserViewModel: ObservableObject {
             }
         tabObservers[tab.id] = observer
     }
+
+    private func applyWindowSettings() {
+        guard let window = browserWindow else { return }
+
+        window.sharingType = isHiddenFromScreenCapture ? .none : .readOnly
+        window.level = staysOnTop ? .floating : .normal
+
+        let opacity = clampedWindowOpacity
+        window.alphaValue = CGFloat(opacity)
+        window.isOpaque = opacity >= 1.0
+        window.backgroundColor = opacity >= 1.0 ? .windowBackgroundColor : .clear
+    }
+}
+
+private enum BrowserPreferences {
+    static let isHiddenFromScreenCapture = "isHiddenFromScreenCapture"
+    static let windowOpacity = "windowOpacity"
+    static let staysOnTop = "staysOnTop"
 }

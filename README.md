@@ -6,8 +6,9 @@ A lightweight web browser wrapper for macOS built with SwiftUI and WebKit.
 
 - 🌐 **WebKit-powered browsing** - Uses the same engine as Safari
 - 🔍 **Smart URL bar** - Enter URLs or search directly with Google
-- ⬅️➡️ **Navigation controls** - Back, forward, reload, and home buttons  
+- ⬅️➡️ **Navigation controls** - Back, forward, reload, and home buttons
 - 🔒 **Secure browsing** - HTTPS indicator in URL bar
+- 🕶️ **Stealth window controls** - Hide the browser from screen capture, adjust transparency, and keep it on top
 - 🎨 **Clean, native UI** - Built with SwiftUI for a modern macOS experience
 - ⌨️ **Keyboard shortcuts** - Cmd+T for new tab (ready for future multi-tab support)
 
@@ -33,6 +34,9 @@ That's it! The browser will launch with Google as the home page.
 | **Reload/Stop** | Click the refresh button (becomes a stop button while loading) |
 | **Go Home** | Click the house icon to return to Google |
 | **Clear URL** | Click the X button in the address bar |
+| **Hide from Capture** | Click the eye-slash button in the toolbar |
+| **Keep on Top** | Click the pin button in the toolbar |
+| **Adjust Transparency** | Drag the transparency slider in the toolbar |
 
 ## Documentation
 
@@ -48,6 +52,7 @@ That's it! The browser will launch with Google as the home page.
 - ✅ Keyboard shortcuts (Cmd+T, Cmd+W, Cmd+1-9, etc.)
 - ✅ Tab persistence (no reload on switch)
 - ✅ Professional UI with hover effects
+- ✅ Screen capture hiding, adjustable window transparency, and always-on-top mode
 
 ## Future Enhancements
 
