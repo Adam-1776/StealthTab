@@ -138,6 +138,11 @@ struct EmptyStateView: View {
 
 struct BrowserToolbar: View {
     @ObservedObject var viewModel: BrowserViewModel
+    @State private var toolbarWidth: CGFloat = 0
+
+    private var usesCompactWindowControls: Bool {
+        toolbarWidth < 560
+    }
 
     var body: some View {
         HStack(spacing: BrowserConfig.toolbarSpacing) {
@@ -145,12 +150,34 @@ struct BrowserToolbar: View {
             URLBar(viewModel: viewModel)
                 .frame(minWidth: 80, maxWidth: .infinity)
                 .layoutPriority(0)
-            WindowControls(viewModel: viewModel)
+            WindowControls(
+                viewModel: viewModel,
+                isCompact: usesCompactWindowControls
+            )
                 .layoutPriority(1)
         }
         .padding(.horizontal, BrowserConfig.toolbarHorizontalPadding)
         .padding(.vertical, BrowserConfig.toolbarVerticalPadding)
         .background(Color(nsColor: .windowBackgroundColor))
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: ToolbarWidthPreferenceKey.self,
+                    value: proxy.size.width
+                )
+            }
+        }
+        .onPreferenceChange(ToolbarWidthPreferenceKey.self) { width in
+            toolbarWidth = width
+        }
+    }
+}
+
+private struct ToolbarWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -233,6 +260,7 @@ struct NavigationButton: View {
 
 struct WindowControls: View {
     @ObservedObject var viewModel: BrowserViewModel
+    let isCompact: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -250,9 +278,8 @@ struct WindowControls: View {
                 tooltip: viewModel.staysOnTop ? "Window stays on top" : "Window uses normal stacking"
             )
 
-            OpacityControl(viewModel: viewModel)
+            OpacityControl(viewModel: viewModel, isCompact: isCompact)
         }
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -285,26 +312,36 @@ struct ToolbarToggleButton: View {
 
 struct OpacityControl: View {
     @ObservedObject var viewModel: BrowserViewModel
+    let isCompact: Bool
     @State private var isShowingOpacityPopover = false
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            OpacitySlider(viewModel: viewModel)
+        Group {
+            if isCompact {
+                Button {
+                    isShowingOpacityPopover.toggle()
+                } label: {
+                    Image(systemName: "circle.lefthalf.filled")
+                        .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
+                        .foregroundColor(.primary)
+                        .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
+                }
+                .buttonStyle(.plain)
+                .help("Adjust window transparency")
+                .popover(isPresented: $isShowingOpacityPopover, arrowEdge: .bottom) {
+                    OpacitySlider(viewModel: viewModel)
+                        .padding(12)
+                        .frame(width: 180)
+                }
+            } else {
+                if isShowingOpacityPopover {
+                    EmptyView()
+                        .onAppear {
+                            isShowingOpacityPopover = false
+                        }
+                }
 
-            Button {
-                isShowingOpacityPopover.toggle()
-            } label: {
-                Image(systemName: "circle.lefthalf.filled")
-                    .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
-                    .foregroundColor(.primary)
-                    .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
-            }
-            .buttonStyle(.plain)
-            .help("Adjust window transparency")
-            .popover(isPresented: $isShowingOpacityPopover, arrowEdge: .bottom) {
                 OpacitySlider(viewModel: viewModel)
-                    .padding(12)
-                    .frame(width: 180)
             }
         }
         .frame(height: BrowserConfig.buttonSize)

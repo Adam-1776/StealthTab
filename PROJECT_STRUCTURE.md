@@ -10,15 +10,18 @@ StealthTab/
 │   └── StealthTabApp.swift          # Application entry point
 │
 ├── Models/
-│   └── Tab.swift                    # Tab data model
+│   ├── Tab.swift                    # Tab data model
+│   └── HistoryItem.swift            # Browsing history entry model
 │
 ├── ViewModels/
-│   └── BrowserViewModel.swift       # Browser state & business logic
+│   ├── BrowserViewModel.swift       # Browser state, tabs, navigation, window settings
+│   └── HistoryManager.swift         # History persistence, search, and deletion
 │
 ├── Views/
 │   ├── ContentView.swift            # Main browser UI container
 │   ├── TabBarView.swift             # Tab bar with tab items
 │   ├── NewTabView.swift             # New tab screen
+│   ├── HistoryView.swift            # Searchable browsing history sheet
 │   └── WebView.swift                # WKWebView wrapper
 │
 ├── Utilities/
@@ -40,6 +43,7 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 │   - ContentView     │
 │   - TabBarView      │
 │   - NewTabView      │
+│   - HistoryView     │
 │   - WebView         │
 └──────────┬──────────┘
            │ Observes
@@ -47,12 +51,14 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 ┌─────────────────────┐
 │   ViewModels/       │  ← Logic Layer
 │   - BrowserViewModel│
+│   - HistoryManager  │
 └──────────┬──────────┘
            │ Manages
            ↓
 ┌─────────────────────┐
 │   Models/           │  ← Data Layer
 │   - Tab             │
+│   - HistoryItem     │
 └─────────────────────┘
            ↕
 ┌─────────────────────┐
@@ -66,13 +72,14 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 
 ### 1. App/
 **Purpose**: Application lifecycle and configuration
-- `StealthTabApp.swift` - Main `@main` entry point, window setup
+- `StealthTabApp.swift` - Main `@main` entry point, hidden-title-bar window setup, and History menu commands
 
 ### 2. Models/
 **Purpose**: Data structures representing domain entities
 - `Tab.swift` - Represents a browser tab with URL, title, loading state, etc.
 - Conforms to `ObservableObject` for SwiftUI reactivity
 - Holds reference to WKWebView instance
+- `HistoryItem.swift` - Codable history record with URL, title, visit date, and id
 
 ### 3. ViewModels/
 **Purpose**: Business logic and state management
@@ -81,7 +88,12 @@ StealthTab follows the **Model-View-ViewModel** architecture:
   - Handles tab creation, switching, closing
   - Navigation actions (back, forward, reload)
   - URL input processing
+  - Applies window privacy settings: screen-capture hiding, transparency, and always-on-top mode
   - Observable by views via `@Published` properties
+- `HistoryManager.swift` - Stores up to 1,000 history entries in `UserDefaults`
+  - Adds page visits after successful WebKit loads
+  - Searches by title or URL
+  - Deletes individual items or clears all history
 
 ### 4. Views/
 **Purpose**: SwiftUI user interface components
@@ -91,6 +103,8 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 - Coordinates tab bar, toolbar, and web content
 - Handles keyboard shortcuts
 - Manages view switching (WebView vs NewTabView)
+- Resolves the AppKit `NSWindow` so the view model can apply window-level settings
+- Hosts the history sheet
 
 #### TabBarView.swift
 - Horizontal tab bar with scrolling
@@ -104,10 +118,17 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 - Quick links to popular sites
 - Clean, centered design
 
+#### HistoryView.swift
+- Sheet for browsing saved history
+- Search field for title and URL matching
+- Groups entries by Today, Yesterday, This Week, This Month, and month
+- Supports opening, deleting, and clearing history
+
 #### WebView.swift
 - NSViewRepresentable wrapper for WKWebView
 - WebKit navigation delegate
 - Bridges WebKit callbacks to SwiftUI state
+- Reuses each tab's `WKWebView` so tab switching does not reload pages
 
 ### 5. Utilities/
 **Purpose**: Shared helpers and configuration
@@ -169,6 +190,30 @@ Tab properties updated (title, loading state, etc.)
 SwiftUI re-renders affected views
 ```
 
+### Window Settings Flow
+```
+ContentView resolves NSWindow via WindowAccessor
+    ↓
+BrowserViewModel.attachWindow(window)
+    ↓
+Published settings apply to NSWindow
+    ↓
+sharingType, alphaValue, background, and level update immediately
+```
+
+### History Flow
+```
+WKWebView finishes loading
+    ↓
+WebView.Coordinator sends URL/title callback
+    ↓
+BrowserViewModel.addToHistory(url:title:)
+    ↓
+HistoryManager inserts and persists entry
+    ↓
+HistoryView reflects searchable, grouped history
+```
+
 ## 🎯 Design Principles
 
 ### 1. Separation of Concerns
@@ -225,11 +270,11 @@ Utilities (used by all layers)
 
 ## 📊 File Statistics
 
-- **Total Swift Files**: 9
-- **Lines of Code**: ~1,200
-- **Views**: 4 files
-- **ViewModels**: 1 file
-- **Models**: 1 file
+- **Total Swift Files**: 12
+- **Lines of Code**: ~1,800
+- **Views**: 5 files
+- **ViewModels**: 2 files
+- **Models**: 2 files
 - **Utilities**: 2 files
 - **App**: 1 file
 
@@ -258,6 +303,7 @@ Utilities (used by all layers)
 - **SwiftUI**: UI framework
 - **WebKit**: Web rendering engine
 - **Combine**: Reactive programming
+- **AppKit**: macOS window controls and alerts
 
 ## 🎓 Learning Resources
 
@@ -274,10 +320,9 @@ For developers new to this codebase:
 - Project uses Xcode's automatic file synchronization
 - No manual pbxproj updates needed for new files
 - Follows Apple's SwiftUI best practices
-- Designed for macOS 14.0+
+- Designed for macOS 15.6+
 
 ---
 
-**Last Updated**: November 8, 2025
-**Version**: 1.0.0
-
+**Last Updated**: May 22, 2026
+**Version**: 1.1.0

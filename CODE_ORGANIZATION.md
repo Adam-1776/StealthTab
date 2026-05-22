@@ -1,946 +1,316 @@
 # StealthTab Code Organization
 
-This document provides a detailed explanation of the StealthTab browser's code structure, architecture, and implementation.
+This document explains how the current StealthTab codebase is organized and how state moves between SwiftUI, WebKit, AppKit, and persistence.
 
-## Table of Contents
+## Architecture
 
-- [Architecture Overview](#architecture-overview)
-- [Design Patterns](#design-patterns)
-- [File Structure](#file-structure)
-- [Detailed Component Breakdown](#detailed-component-breakdown)
-- [Data Flow](#data-flow)
-- [Key Implementation Details](#key-implementation-details)
-
----
-
-## Architecture Overview
-
-StealthTab follows the **MVVM (Model-View-ViewModel)** architecture pattern, which provides clear separation of concerns:
+StealthTab uses a compact MVVM structure:
 
 ```
-┌─────────────────┐
-│  ContentView    │  ← View Layer (UI)
-│  (SwiftUI)      │
-└────────┬────────┘
-         │ Bindings
-         ↓
-┌─────────────────┐
-│ BrowserViewModel│  ← ViewModel Layer (Logic & State)
-│  (@Published)   │
-└────────┬────────┘
-         │ Controls
-         ↓
-┌─────────────────┐
-│    WebView      │  ← Model/View Layer (WebKit Wrapper)
-│  (WKWebView)    │
-└─────────────────┘
-         ↕
-┌─────────────────┐
-│ BrowserConfig   │  ← Configuration Layer (Constants)
-└─────────────────┘
+SwiftUI Views
+    ↓ observe / call actions
+BrowserViewModel + HistoryManager
+    ↓ manage
+Tab + HistoryItem models
+    ↓ bridge
+WKWebView and NSWindow
 ```
 
----
+The app is intentionally small, so most UI composition lives in `ContentView.swift` and related view files rather than a deep module hierarchy.
 
-## Design Patterns
-
-### 1. **MVVM (Model-View-ViewModel)**
-- **View**: `ContentView.swift` and its sub-components
-- **ViewModel**: `BrowserViewModel.swift`
-- **Model**: `WebView.swift` (wraps WKWebView)
-
-### 2. **Observable Pattern**
-- Uses `@Published` properties in `BrowserViewModel`
-- SwiftUI automatically observes changes and updates the UI
-
-### 3. **Coordinator Pattern**
-- `WebView.Coordinator` handles WebKit navigation delegate callbacks
-- Bridges between WKWebView and SwiftUI
-
-### 4. **Dependency Injection**
-- `BrowserViewModel` is injected into view components via `@ObservedObject`
-- Allows for testability and flexibility
-
-### 5. **Single Responsibility Principle**
-- Each file has one clear purpose
-- UI components are small and focused
-
----
-
-## File Structure
+## File Map
 
 ```
-StealthTab/
-├── StealthTabApp.swift         (App Entry Point)
-├── ContentView.swift           (Main UI Components)
-├── BrowserViewModel.swift      (State Management)
-├── WebView.swift              (WebKit Wrapper)
-└── BrowserConfig.swift        (Configuration)
+StealthTab/StealthTab/
+├── App/
+│   └── StealthTabApp.swift
+├── Models/
+│   ├── Tab.swift
+│   └── HistoryItem.swift
+├── ViewModels/
+│   ├── BrowserViewModel.swift
+│   └── HistoryManager.swift
+├── Views/
+│   ├── ContentView.swift
+│   ├── TabBarView.swift
+│   ├── NewTabView.swift
+│   ├── HistoryView.swift
+│   └── WebView.swift
+└── Utilities/
+    ├── BrowserConfig.swift
+    └── Utils.swift
 ```
 
----
+## App Entry
 
-## Detailed Component Breakdown
+`StealthTabApp.swift` defines the `@main` app and creates the main `WindowGroup` with `ContentView`.
 
-### 1. StealthTabApp.swift
+It also:
 
-**Purpose**: Application entry point and window configuration.
+- Uses `.windowStyle(.hiddenTitleBar)` for the streamlined browser frame.
+- Replaces the default New command so `ContentView` can own tab creation.
+- Adds a History menu with `Show Full History` and `Clear History...`.
+- Provides a focused scene value so menu commands can reach the active `BrowserViewModel`.
 
-**Key Components**:
+## Models
 
-```swift
-@main
-struct StealthTabApp: App
+### Tab
+
+`Tab` is an `ObservableObject` representing one browser tab.
+
+It tracks:
+
+- `title`
+- `urlString`
+- `isLoading`
+- `canGoBack`
+- `canGoForward`
+- `isNewTab`
+- The tab's retained `WKWebView`
+
+Keeping the `WKWebView` on the tab is what lets the app switch tabs without reloading pages.
+
+### HistoryItem
+
+`HistoryItem` is a small `Codable` model with `id`, `url`, `title`, and `visitDate`. `HistoryManager` encodes these items into `UserDefaults`.
+
+## View Models
+
+### BrowserViewModel
+
+`BrowserViewModel` is the main state owner. It is isolated to the main actor because it drives SwiftUI and AppKit objects.
+
+It owns:
+
+- The tab list and active tab id.
+- URL bar text.
+- History sheet visibility.
+- A `HistoryManager`.
+- Window settings for screen-capture hiding, opacity, and always-on-top mode.
+
+Core responsibilities:
+
+- Create, close, and switch tabs.
+- Drive back, forward, reload, stop, and URL loading.
+- Convert user input into URLs through `Utils.processInput`.
+- Sync the active tab's URL into the URL bar.
+- Add loaded pages to history.
+- Attach to the real `NSWindow` and apply window-level privacy settings.
+
+Window settings are persisted with `UserDefaults`:
+
+- `isHiddenFromScreenCapture`
+- `windowOpacity`
+- `staysOnTop`
+
+When a setting changes, `applyWindowSettings()` updates the live window:
+
+- `window.sharingType = .none` hides it from screen sharing/capture APIs that respect AppKit sharing type.
+- `window.level = .floating` keeps it above normal windows.
+- `window.alphaValue` controls transparency.
+- `window.backgroundColor` and `window.isOpaque` are adjusted for transparent states.
+
+### HistoryManager
+
+`HistoryManager` owns browsing history and persists it in `UserDefaults` under `BrowsingHistory`.
+
+It:
+
+- Adds successful page visits.
+- Skips empty URLs and `about:blank`.
+- Avoids adding the exact same URL twice within five seconds.
+- Keeps the newest 1,000 items.
+- Searches by lowercased title or URL.
+- Deletes individual entries or clears all history.
+
+## Views
+
+### ContentView
+
+`ContentView` creates the `BrowserViewModel` and lays out the main browser:
+
+```
+TabBarView
+Divider
+BrowserToolbar
+Divider
+NewTabView or BrowserWebView
 ```
 
-**Responsibilities**:
-- Define the app's main entry point with `@main`
-- Configure the window style (`.hiddenTitleBar`)
-- Set up custom keyboard shortcuts and commands
-- Initialize the main `WindowGroup` with `ContentView`
+It also:
 
-**Key Features**:
-- **Window Style**: Uses `.hiddenTitleBar` to create a modern, streamlined UI without the standard macOS title bar
-- **Command Groups**: Defines custom menu commands (e.g., Cmd+T for new tab - placeholder for future feature)
+- Handles keyboard shortcuts:
+  - Cmd+T: new tab
+  - Cmd+W: close tab
+  - Cmd+R: reload/stop
+  - Cmd+[ and Cmd+]: back/forward
+  - Cmd+1 through Cmd+9: switch tabs
+- Shows `HistoryView` as a sheet.
+- Provides `WindowAccessor`, an `NSViewRepresentable`, to resolve the containing `NSWindow`.
 
----
+### BrowserToolbar
 
-### 2. BrowserConfig.swift
+`BrowserToolbar` contains:
 
-**Purpose**: Centralized configuration and constants.
+- Back, forward, and reload/stop buttons.
+- The URL bar.
+- Screen-capture visibility toggle.
+- Always-on-top toggle.
+- Opacity control.
 
-**Structure**:
+The opacity control uses an explicit toolbar-width breakpoint:
 
-```swift
-@MainActor
-struct BrowserConfig
-```
+- At `560pt` and wider, it shows the full slider.
+- Below `560pt`, it shows a compact icon button that opens the slider in a popover.
 
-**Configuration Categories**:
+This keeps the window narrow without permanently hiding the full control on wider layouts.
 
-#### URLs
-- `defaultHomeURL`: Default home page (Google)
-- `searchEngineURL`: Search engine query template
+### TabBarView
 
-#### User Agent
-- `desktopUserAgent`: User-Agent string to identify as Safari on macOS
-  - Ensures websites serve desktop versions
-  - Format matches Safari 17.0 on macOS
+`TabBarView` displays all open tabs in a horizontal scroll view and provides the plus button for new tabs. `TabItem` renders each tab with its title, loading indicator, active state, hover state, and close button.
 
-#### Window Settings
-- `minimumWindowWidth`: 800px minimum width
-- `minimumWindowHeight`: 600px minimum height
+### NewTabView
 
-#### UI Settings
-- `toolbarSpacing`: 12px spacing between toolbar items
-- `toolbarHorizontalPadding`: 12px horizontal padding
-- `toolbarVerticalPadding`: 8px vertical padding
-- `urlBarCornerRadius`: 8px rounded corners
-- `urlBarHorizontalPadding`: 12px URL bar padding
-- `urlBarVerticalPadding`: 6px URL bar padding
+`NewTabView` is shown when the active tab has not navigated yet. It provides a search/URL field plus quick links for Google, News, Gmail, and YouTube.
 
-#### Button Settings
-- `buttonSize`: 28px button dimensions
-- `buttonIconSize`: 14px icon size for toolbar buttons
-- `urlBarIconSize`: 12px icon size for URL bar icons
+### HistoryView
 
-**Design Notes**:
-- Marked with `@MainActor` for thread-safe access from UI components
-- All properties are `static let` for compile-time constants
-- Easy to modify design system in one place
+`HistoryView` shows saved history in a sheet. It includes:
 
----
+- Search by title or URL.
+- Grouping by Today, Yesterday, This Week, This Month, or month.
+- Row tap to reopen a URL.
+- Per-row delete on hover.
+- Clear-all with confirmation.
 
-### 3. BrowserViewModel.swift
+### WebView
 
-**Purpose**: State management and business logic for the browser.
+`WebView` bridges `WKWebView` into SwiftUI with `NSViewRepresentable`.
 
-**Structure**:
+It:
 
-```swift
-@MainActor
-class BrowserViewModel: ObservableObject
-```
+- Reuses the tab's existing `WKWebView` when available.
+- Creates a configured `WKWebView` for new navigated tabs.
+- Uses the default website data store.
+- Enables JavaScript.
+- Enables back/forward swipe gestures.
+- Applies the desktop Safari-style user agent from `BrowserConfig`.
+- Observes URL, title, loading, back, and forward state.
+- Calls back to the view model when a page finishes loading so history can be recorded.
 
-**Published Properties** (Observable State):
+## Utilities
 
-| Property | Type | Purpose |
-|----------|------|---------|
-| `urlString` | `String` | Current page URL (source of truth) |
-| `urlInput` | `String` | URL bar text (user input) |
-| `canGoBack` | `Bool` | Enable/disable back button |
-| `canGoForward` | `Bool` | Enable/disable forward button |
-| `isLoading` | `Bool` | Loading state indicator |
-| `pageTitle` | `String` | Current page title |
-| `webView` | `WKWebView?` | Reference to the web view instance |
+### BrowserConfig
 
-#### Initialization
+`BrowserConfig` centralizes constants:
 
-```swift
-init()
-```
-- Initializes with default home URL
-- Sets both `urlString` and `urlInput` to Google
+- Home URL and search URL.
+- Desktop user agent.
+- Window minimums: `360` width, `600` height.
+- Minimum opacity: `0.25`.
+- Toolbar, URL bar, and button sizing.
 
-#### Navigation Methods
+### Utils
 
-**`goBack()`**
-- Calls `webView?.goBack()`
-- Navigates to previous page in history
-- Button disabled when `canGoBack` is false
+`Utils.processInput(_:)` converts address bar text into a navigable URL string.
 
-**`goForward()`**
-- Calls `webView?.goForward()`
-- Navigates to next page in history
-- Button disabled when `canGoForward` is false
+Rules:
 
-**`reload()`**
-- Smart reload/stop functionality
-- If loading: stops the current navigation
-- If not loading: reloads the current page
-
-**`goHome()`**
-- Navigates to `BrowserConfig.defaultHomeURL`
-- Resets to Google homepage
-
-**`clearURLInput()`**
-- Clears the URL input field
-- Used by the X button in URL bar
-
-#### URL Loading Logic
-
-**`loadURL(_ input: String)`**
-
-This is the core navigation method with smart URL handling:
-
-**Step 1: Trim whitespace**
-```swift
-var urlToLoad = input.trimmingCharacters(in: .whitespaces)
-```
-
-**Step 2: Detect URL vs Search Query**
-```swift
-if !urlToLoad.contains(".") || !urlToLoad.contains("://") {
-    // It's a search query - use Google search
-    urlToLoad = constructSearchURL(query: urlToLoad)
-}
-```
-
-Logic:
-- If input has no dot (.) or protocol (://), treat as search
-- Example: "cats" → Google search for "cats"
-
-**Step 3: Add HTTPS if needed**
-```swift
-else if !urlToLoad.hasPrefix("http://") && !urlToLoad.hasPrefix("https://") {
-    urlToLoad = "https://" + urlToLoad
-}
-```
-
-Logic:
-- If it looks like a URL but lacks protocol, add `https://`
-- Example: "apple.com" → "https://apple.com"
-
-**Step 4: Load the URL**
-```swift
-if let url = URL(string: urlToLoad) {
-    webView?.load(URLRequest(url: url))
-    urlString = urlToLoad
-}
-```
-
-**`updateURLInput(from urlString: String)`**
-- Syncs URL bar text with actual current URL
-- Called when page navigation completes
-
-**`constructSearchURL(query: String) -> String`** (Private)
-- URL-encodes the search query
-- Constructs Google search URL
-- Example: "hello world" → "https://www.google.com/search?q=hello%20world"
-
-**Design Notes**:
-- `@MainActor` ensures all UI updates happen on main thread
-- `ObservableObject` enables SwiftUI to observe changes
-- Holds reference to `WKWebView` to control navigation
-- Separates state (`urlString`) from user input (`urlInput`)
-
----
-
-### 4. WebView.swift
-
-**Purpose**: SwiftUI wrapper for WKWebView (WebKit engine).
-
-**Structure**:
-
-```swift
-struct WebView: NSViewRepresentable
-```
-
-**Binding Properties** (Two-way Data Flow):
-
-| Property | Type | Direction |
-|----------|------|-----------|
-| `urlString` | `Binding<String>` | WebView → ViewModel |
-| `canGoBack` | `Binding<Bool>` | WebView → ViewModel |
-| `canGoForward` | `Binding<Bool>` | WebView → ViewModel |
-| `isLoading` | `Binding<Bool>` | WebView → ViewModel |
-| `pageTitle` | `Binding<String>` | WebView → ViewModel |
-| `webView` | `Binding<WKWebView?>` | WebView → ViewModel |
-
-#### NSViewRepresentable Protocol Methods
-
-**`makeCoordinator() -> Coordinator`**
-- Creates the coordinator that handles WebKit delegate callbacks
-- Called once when the view is first created
-
-**`makeNSView(context: Context) -> WKWebView`**
-
-This method sets up the WKWebView:
-
-**Step 1: Create Configuration**
-```swift
-let configuration = WKWebViewConfiguration()
-configuration.websiteDataStore = .default()
-```
-- Uses default data store (cookies, cache, etc.)
-
-**Step 2: Set JavaScript Preferences**
-```swift
-let preferences = WKWebpagePreferences()
-preferences.allowsContentJavaScript = true
-configuration.defaultWebpagePreferences = preferences
-```
-- Explicitly enables JavaScript execution
-- Required for modern web applications
-
-**Step 3: Initialize WKWebView**
-```swift
-let webView = WKWebView(frame: .zero, configuration: configuration)
-webView.navigationDelegate = context.coordinator
-webView.allowsBackForwardNavigationGestures = true
-```
-- Sets navigation delegate to coordinator
-- Enables trackpad swipe gestures for navigation
-
-**Step 4: Set Desktop User-Agent**
-```swift
-webView.customUserAgent = BrowserConfig.desktopUserAgent
-```
-- Identifies as Safari on macOS
-- Ensures websites serve desktop layouts
-- Critical for proper rendering (e.g., Google's centered logo)
-
-**Step 5: Load Initial URL**
-```swift
-if let url = URL(string: urlString) {
-    webView.load(URLRequest(url: url))
-}
-```
-
-**Step 6: Store Reference**
-```swift
-DispatchQueue.main.async {
-    self.webView = webView
-}
-```
-- Async to avoid SwiftUI state mutation during view update
-- Allows ViewModel to control the web view
-
-**`updateNSView(_ nsView: WKWebView, context: Context)`**
-- Called when SwiftUI state changes
-- Currently empty as updates are handled by coordinator
-
-#### Coordinator Class
-
-**Purpose**: Bridge between WKWebView delegate and SwiftUI bindings.
-
-```swift
-class Coordinator: NSObject, WKNavigationDelegate
-```
-
-**`init(_ parent: WebView)`**
-- Stores reference to parent WebView
-- Allows access to bindings
-
-**WKNavigationDelegate Methods**:
-
-**`webView(_:didStartProvisionalNavigation:)`**
-```swift
-parent.isLoading = true
-```
-- Called when navigation starts
-- Updates loading indicator
-
-**`webView(_:didFinish:)`**
-```swift
-parent.isLoading = false
-parent.canGoBack = webView.canGoBack
-parent.canGoForward = webView.canGoForward
-
-if let url = webView.url?.absoluteString {
-    parent.urlString = url
-}
-
-if let title = webView.title {
-    parent.pageTitle = title
-}
-```
-- Called when page finishes loading
-- Updates all navigation state
-- Syncs URL bar with actual current URL
-- Updates page title
-
-**`webView(_:didFail:withError:)`**
-```swift
-parent.isLoading = false
-print("Navigation failed: \(error.localizedDescription)")
-```
-- Called when navigation fails
-- Stops loading indicator
-- Logs error
-
-**`webView(_:didFailProvisionalNavigation:withError:)`**
-```swift
-parent.isLoading = false
-print("Provisional navigation failed: \(error.localizedDescription)")
-```
-- Called when provisional navigation fails (e.g., DNS error)
-- Stops loading indicator
-- Logs error
-
-**`webView(_:decidePolicyFor:decisionHandler:)`**
-```swift
-decisionHandler(.allow)
-```
-- Called before each navigation
-- Can block or allow navigation
-- Currently allows all navigation
-
-**Design Notes**:
-- `NSViewRepresentable` bridges AppKit (WKWebView) to SwiftUI
-- Coordinator pattern handles delegate callbacks
-- Bindings create reactive data flow
-- Proper User-Agent ensures correct rendering
-
----
-
-### 5. ContentView.swift
-
-**Purpose**: Main UI composition and view components.
-
-**Structure**: Hierarchical view composition with small, reusable components.
-
-#### Main View: ContentView
-
-```swift
-struct ContentView: View
-```
-
-**State Management**:
-```swift
-@StateObject private var viewModel = BrowserViewModel()
-```
-- Creates and owns the view model
-- `@StateObject` ensures single instance for view lifetime
-
-**Layout Structure**:
-```swift
-VStack(spacing: 0) {
-    BrowserToolbar(viewModel: viewModel)
-    Divider()
-    BrowserWebView(viewModel: viewModel)
-}
-.frame(minWidth: 800, minHeight: 600)
-.onChange(of: viewModel.urlString) { oldValue, newValue in
-    viewModel.updateURLInput(from: newValue)
-}
-```
-
-**Key Features**:
-- Zero spacing VStack for seamless layout
-- Divider separates toolbar from content
-- Minimum window size enforced
-- URL sync via `onChange`
-
----
-
-#### BrowserToolbar
-
-```swift
-struct BrowserToolbar: View
-```
-
-**Purpose**: Container for all toolbar elements.
-
-**Layout**:
-```swift
-HStack(spacing: BrowserConfig.toolbarSpacing) {
-    NavigationButtons(viewModel: viewModel)
-    URLBar(viewModel: viewModel)
-    HomeButton(viewModel: viewModel)
-}
-.padding(.horizontal, BrowserConfig.toolbarHorizontalPadding)
-.padding(.vertical, BrowserConfig.toolbarVerticalPadding)
-.background(Color(nsColor: .windowBackgroundColor))
-```
-
-**Components**:
-1. Navigation buttons (left)
-2. URL bar (center, flexible)
-3. Home button (right)
-
-**Design**:
-- Uses system background color for native look
-- All spacing from `BrowserConfig`
-
----
-
-#### NavigationButtons
-
-```swift
-struct NavigationButtons: View
-```
-
-**Purpose**: Groups back, forward, and reload buttons.
-
-**Components**:
-
-**Back Button**:
-- Icon: `chevron.left`
-- Action: `viewModel.goBack()`
-- Enabled: `viewModel.canGoBack`
-- Tooltip: "Go Back"
-
-**Forward Button**:
-- Icon: `chevron.right`
-- Action: `viewModel.goForward()`
-- Enabled: `viewModel.canGoForward`
-- Tooltip: "Go Forward"
-
-**Reload/Stop Button**:
-- Icon: Dynamic - `xmark` when loading, `arrow.clockwise` otherwise
-- Action: `viewModel.reload()` (smart reload/stop)
-- Always enabled
-- Tooltip: Dynamic - "Stop Loading" or "Reload"
-
----
-
-#### NavigationButton
-
-```swift
-struct NavigationButton: View
-```
-
-**Purpose**: Reusable button component for navigation actions.
-
-**Parameters**:
-- `iconName`: SF Symbol name
-- `action`: Closure to execute
-- `isEnabled`: Enable/disable state
-- `tooltip`: Help text on hover
-
-**Implementation**:
-```swift
-Button(action: action) {
-    Image(systemName: iconName)
-        .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
-        .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
-}
-.buttonStyle(.plain)
-.disabled(!isEnabled)
-.opacity(isEnabled ? 1.0 : 0.3)
-.help(tooltip)
-```
-
-**Features**:
-- Consistent sizing from config
-- Plain style (no standard button chrome)
-- Visual disabled state (30% opacity)
-- Hover tooltips via `.help()`
-
----
-
-#### URLBar
-
-```swift
-struct URLBar: View
-```
-
-**Purpose**: Address bar with icon, text field, and clear button.
-
-**Layout**:
-```swift
-HStack(spacing: 8) {
-    URLBarIcon(isLoading: viewModel.isLoading)
-    URLTextField(viewModel: viewModel)
-    if !viewModel.urlInput.isEmpty {
-        ClearButton(action: viewModel.clearURLInput)
-    }
-}
-.padding(.horizontal, BrowserConfig.urlBarHorizontalPadding)
-.padding(.vertical, BrowserConfig.urlBarVerticalPadding)
-.background(Color(nsColor: .controlBackgroundColor))
-.cornerRadius(BrowserConfig.urlBarCornerRadius)
-```
-
-**Features**:
-- Flexible width (fills available space)
-- Rounded corners for modern look
-- Conditional clear button (only when text present)
-- System control background color
-
----
-
-#### URLBarIcon
-
-```swift
-struct URLBarIcon: View
-```
-
-**Purpose**: Dynamic icon showing loading or security state.
-
-**Logic**:
-```swift
-Image(systemName: isLoading ? "arrow.2.circlepath" : "lock.fill")
-    .font(.system(size: BrowserConfig.urlBarIconSize))
-    .foregroundColor(isLoading ? .blue : .green)
-    .opacity(isLoading ? 0.6 : 0.8)
-```
-
-**States**:
-- **Loading**: Blue animated arrows
-- **Loaded**: Green lock icon (HTTPS indicator)
-
----
-
-#### URLTextField
-
-```swift
-struct URLTextField: View
-```
-
-**Purpose**: Text input for URLs and search queries.
-
-**Implementation**:
-```swift
-TextField("Enter URL or search...", text: $viewModel.urlInput)
-    .textFieldStyle(.plain)
-    .font(.system(size: 13))
-    .onSubmit {
-        viewModel.loadURL(viewModel.urlInput)
-    }
-```
-
-**Features**:
-- Two-way binding to `urlInput`
-- Plain style (no border/background)
-- Submit on Enter key
-- 13pt system font
-
----
-
-#### ClearButton
-
-```swift
-struct ClearButton: View
-```
-
-**Purpose**: X button to clear URL input.
-
-**Implementation**:
-```swift
-Button(action: action) {
-    Image(systemName: "xmark.circle.fill")
-        .font(.system(size: BrowserConfig.urlBarIconSize))
-        .foregroundColor(.secondary)
-}
-.buttonStyle(.plain)
-```
-
-**Features**:
-- Secondary color (gray)
-- Plain button style
-- Compact size
-
----
-
-#### HomeButton
-
-```swift
-struct HomeButton: View
-```
-
-**Purpose**: Quick navigation to home page.
-
-**Implementation**:
-```swift
-Button(action: viewModel.goHome) {
-    Image(systemName: "house.fill")
-        .font(.system(size: BrowserConfig.buttonIconSize, weight: .medium))
-        .frame(width: BrowserConfig.buttonSize, height: BrowserConfig.buttonSize)
-}
-.buttonStyle(.plain)
-.help("Home")
-```
-
-**Features**:
-- House icon
-- Always enabled
-- Tooltip on hover
-
----
-
-#### BrowserWebView
-
-```swift
-struct BrowserWebView: View
-```
-
-**Purpose**: Container for the WebView component.
-
-**Implementation**:
-```swift
-WebView(
-    urlString: $viewModel.urlString,
-    canGoBack: $viewModel.canGoBack,
-    canGoForward: $viewModel.canGoForward,
-    isLoading: $viewModel.isLoading,
-    pageTitle: $viewModel.pageTitle,
-    webView: $viewModel.webView
-)
-```
-
-**Features**:
-- Passes all bindings from ViewModel to WebView
-- Fills remaining space in VStack
-
----
+- Existing `http://` and `https://` URLs are used as-is.
+- Inputs that look like URLs get `https://` prepended.
+- Search-like inputs become Google search URLs.
+- URL detection includes localhost, IPv4 addresses, common TLDs, and simple domain patterns.
 
 ## Data Flow
 
-### 1. User Enters URL
+### Opening a URL
 
 ```
-User Types → URLTextField → viewModel.urlInput
-User Presses Enter → onSubmit → viewModel.loadURL()
-loadURL() → Processes URL/Search → webView?.load()
+User submits URL bar
+    ↓
+BrowserViewModel.loadURL()
+    ↓
+Utils.processInput()
+    ↓
+Active Tab updates urlString and isNewTab
+    ↓
+BrowserWebView creates or reuses WKWebView
+    ↓
+WKWebView loads URLRequest
 ```
 
-### 2. Page Loads
+### WebKit State Updates
 
 ```
-WKWebView Navigation Starts
+WKWebView changes URL/title/loading/navigation state
     ↓
-Coordinator.didStartProvisionalNavigation
+WebView.Coordinator KVO or delegate callback
     ↓
-parent.isLoading = true
+Tab published properties update
     ↓
-SwiftUI Updates URLBarIcon (shows loading)
-    ↓
-WKWebView Navigation Completes
-    ↓
-Coordinator.didFinish
-    ↓
-Updates: urlString, canGoBack, canGoForward, pageTitle, isLoading
-    ↓
-SwiftUI Updates UI (URL bar, buttons, icon)
+SwiftUI refreshes tab title, buttons, URL bar, and loading icon
 ```
-
-### 3. User Clicks Back Button
-
-```
-User Clicks Back
-    ↓
-NavigationButton.action()
-    ↓
-viewModel.goBack()
-    ↓
-webView?.goBack()
-    ↓
-(Triggers Page Load Flow Above)
-```
-
-### 4. URL Sync
-
-```
-Page Navigation Completes
-    ↓
-Coordinator updates urlString
-    ↓
-ContentView.onChange(of: urlString)
-    ↓
-viewModel.updateURLInput()
-    ↓
-URL bar shows current URL
-```
-
----
-
-## Key Implementation Details
-
-### Thread Safety
-
-**Main Actor Isolation**:
-```swift
-@MainActor
-class BrowserViewModel: ObservableObject
-```
-
-```swift
-@MainActor
-struct BrowserConfig
-```
-
-- All UI-related code runs on main thread
-- Prevents race conditions
-- SwiftUI requirement
-
-### Reactive Updates
-
-**Published Properties**:
-```swift
-@Published var urlString: String
-@Published var isLoading: Bool
-```
-
-- Automatically notifies SwiftUI of changes
-- UI updates automatically
-- No manual refresh needed
-
-### Binding Flow
-
-```swift
-// ViewModel owns the state
-@Published var urlString: String
-
-// View creates binding
-WebView(urlString: $viewModel.urlString, ...)
-
-// WebView receives binding
-@Binding var urlString: String
-
-// WebView updates it
-parent.urlString = newValue
-
-// SwiftUI propagates change back to ViewModel
-// UI automatically updates
-```
-
-### User-Agent Importance
-
-Without the custom User-Agent:
-- Websites detect mobile browser
-- Serve mobile layouts
-- Google logo appears at top (mobile style)
-
-With desktop User-Agent:
-- Websites detect desktop Safari
-- Serve desktop layouts
-- Google logo centered (desktop style)
-
-### Smart URL Handling
-
-**Examples**:
-
-| Input | Detection | Result |
-|-------|-----------|--------|
-| `apple.com` | Has dot, no protocol | `https://apple.com` |
-| `cats` | No dot | Google search |
-| `how to cook` | No dot | Google search |
-| `https://github.com` | Has protocol | Load as-is |
-| `localhost:3000` | Has dot | `https://localhost:3000` |
-
-### Error Handling
-
-**Navigation Failures**:
-- Logged to console
-- Loading state reset
-- User can try again
-
-**URL Parsing Failures**:
-- Invalid URLs ignored
-- No navigation occurs
-- Current page remains
-
-### Memory Management
-
-**WebView Reference**:
-```swift
-DispatchQueue.main.async {
-    self.webView = webView
-}
-```
-
-- Async to avoid SwiftUI state mutation warnings
-- Weak reference not needed (lifecycle tied to view)
-
-### Configuration Benefits
-
-Centralized constants enable:
-- Easy theme changes
-- Consistent spacing
-- Quick prototyping
-- Design system enforcement
-
-**Example Change**:
-```swift
-// Change button size across entire app
-static let buttonSize: CGFloat = 32 // was 28
-```
-
-### Component Reusability
-
-**NavigationButton** used for:
-- Back button
-- Forward button
-- Reload button
-
-**Same code, different parameters** - DRY principle.
-
----
-
-## Future Extension Points
-
-### Multiple Tabs
-- Create `Tab` model
-- Add `@Published var tabs: [Tab]` to ViewModel
-- Create `TabBar` component in ContentView
-- Each tab has its own `WKWebView`
-
-### Bookmarks
-- Create `Bookmark` model
-- Add `BookmarksManager` class
-- Add toolbar button and sidebar
-- Persist to UserDefaults or file
 
 ### History
-- Create `HistoryItem` model
-- Log in `Coordinator.didFinish`
-- Add history view
-- Add clear history function
 
-### Downloads
-- Implement `WKDownloadDelegate`
-- Show download progress
-- Manage download location
+```
+WKWebView finishes loading
+    ↓
+WebView didFinish callback passes URL/title
+    ↓
+BrowserViewModel.addToHistory()
+    ↓
+HistoryManager stores newest item
+    ↓
+HistoryView can search, group, open, or delete it
+```
 
-### Settings
-- Create `Settings` view
-- Add preferences: home page, search engine, etc.
-- Persist to UserDefaults
+### Window Settings
+
+```
+ContentView resolves NSWindow
+    ↓
+BrowserViewModel.attachWindow()
+    ↓
+User toggles toolbar control or adjusts opacity
+    ↓
+UserDefaults updates
+    ↓
+NSWindow sharingType, level, alpha, opacity, and background update
+```
+
+## Current Feature Surface
+
+- Multi-tab browsing with retained `WKWebView` instances.
+- New tab screen with quick links.
+- Smart URL/search handling.
+- Back, forward, reload, and stop.
+- Keyboard shortcuts for common tab and navigation actions.
+- Searchable browsing history with persistence.
+- Screen-capture hiding through `NSWindow.SharingType.none`.
+- Adjustable window transparency.
+- Always-on-top mode.
+- Compact opacity popover for narrow windows.
+
+## Extension Points
+
+Good next additions include:
+
+- Bookmarks/favorites manager.
+- Private browsing mode with a non-persistent `WKWebsiteDataStore`.
+- Download handling with `WKDownloadDelegate`.
+- Session restore for tabs across launches.
+- Settings UI for home page, search engine, and default stealth options.
+
+## Notes
+
+- SwiftUI view state is kept local with `@State`.
+- Shared app state lives in `BrowserViewModel` or `HistoryManager`.
+- UI-observed model state uses `@Published`.
+- WebKit delegate and KVO callbacks hop back to the main actor before mutating tab state.
+- New source files are picked up through Xcode's file synchronization; manual project file edits are not normally needed.
 
 ---
 
-## Conclusion
-
-StealthTab demonstrates:
-- ✅ Clean architecture with MVVM
-- ✅ Proper separation of concerns
-- ✅ Reactive programming with Combine
-- ✅ Reusable UI components
-- ✅ Centralized configuration
-- ✅ Thread-safe design
-- ✅ Professional code organization
-
-The codebase is maintainable, testable, and ready for future enhancements.
-
+**Last Updated**: May 22, 2026
+**Version**: 1.1.0
