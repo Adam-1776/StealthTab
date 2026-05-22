@@ -158,26 +158,13 @@ struct BrowserToolbar: View {
         }
         .padding(.horizontal, BrowserConfig.toolbarHorizontalPadding)
         .padding(.vertical, BrowserConfig.toolbarVerticalPadding)
+        .frame(maxWidth: .infinity)
         .background(Color(nsColor: .windowBackgroundColor))
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: ToolbarWidthPreferenceKey.self,
-                    value: proxy.size.width
-                )
-            }
-        }
-        .onPreferenceChange(ToolbarWidthPreferenceKey.self) { width in
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
             toolbarWidth = width
         }
-    }
-}
-
-private struct ToolbarWidthPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
