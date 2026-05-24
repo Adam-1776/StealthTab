@@ -44,7 +44,11 @@ class BrowserViewModel: ObservableObject {
     // MARK: - Private Properties
 
     private var tabObservers: [UUID: AnyCancellable] = [:]
+    private var windowVisibilityObservers: Set<AnyCancellable> = []
     private weak var browserWindow: NSWindow?
+    private var defaultCollectionBehavior: NSWindow.CollectionBehavior?
+    private var defaultWindowLevel: NSWindow.Level?
+    private var defaultStyleMask: NSWindow.StyleMask?
 
     // MARK: - Computed Properties
 
@@ -71,6 +75,7 @@ class BrowserViewModel: ObservableObject {
         observeTab(initialTab)
         activeTabId = initialTab.id
         urlInput = initialTab.urlString
+        observeWindowVisibilityChanges()
     }
 
     // MARK: - Tab Management
@@ -152,6 +157,12 @@ class BrowserViewModel: ObservableObject {
     func attachWindow(_ window: NSWindow?) {
         guard let window = window else { return }
 
+        if browserWindow !== window {
+            defaultCollectionBehavior = window.collectionBehavior
+            defaultWindowLevel = window.level
+            defaultStyleMask = window.styleMask
+        }
+
         browserWindow = window
         applyWindowSettings()
     }
@@ -230,12 +241,76 @@ class BrowserViewModel: ObservableObject {
         guard let window = browserWindow else { return }
 
         window.sharingType = isHiddenFromScreenCapture ? .none : .readOnly
-        window.level = staysOnTop ? .floating : .normal
+        window.collectionBehavior = collectionBehavior(for: window)
+        window.styleMask = styleMask(for: window)
+        window.hidesOnDeactivate = !staysOnTop
+        window.level = staysOnTop ? .screenSaver : (defaultWindowLevel ?? .normal)
+        NSApp.setActivationPolicy(staysOnTop ? .accessory : .regular)
+
+        if staysOnTop {
+            restorePinnedWindowIfNeeded()
+        }
 
         let opacity = clampedWindowOpacity
         window.alphaValue = CGFloat(opacity)
         window.isOpaque = opacity >= 1.0
         window.backgroundColor = opacity >= 1.0 ? .windowBackgroundColor : .clear
+    }
+
+    private func collectionBehavior(for window: NSWindow) -> NSWindow.CollectionBehavior {
+        guard staysOnTop else {
+            return defaultCollectionBehavior ?? window.collectionBehavior
+        }
+
+        return [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+            .ignoresCycle
+        ]
+    }
+
+    private func styleMask(for window: NSWindow) -> NSWindow.StyleMask {
+        var styleMask = defaultStyleMask ?? window.styleMask
+
+        if staysOnTop {
+            styleMask.insert(.nonactivatingPanel)
+        }
+
+        return styleMask
+    }
+
+    private func observeWindowVisibilityChanges() {
+        NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)
+            .sink { [weak self] _ in
+                self?.restorePinnedWindowSoon()
+            }
+            .store(in: &windowVisibilityObservers)
+
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.activeSpaceDidChangeNotification)
+            .sink { [weak self] _ in
+                self?.restorePinnedWindowSoon()
+            }
+            .store(in: &windowVisibilityObservers)
+    }
+
+    private func restorePinnedWindowSoon() {
+        restorePinnedWindowIfNeeded()
+
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            self?.restorePinnedWindowIfNeeded()
+        }
+    }
+
+    private func restorePinnedWindowIfNeeded() {
+        guard staysOnTop, let window = browserWindow else { return }
+
+        window.collectionBehavior = collectionBehavior(for: window)
+        window.styleMask = styleMask(for: window)
+        window.hidesOnDeactivate = false
+        window.level = .screenSaver
+        window.orderFrontRegardless()
     }
 }
 

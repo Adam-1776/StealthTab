@@ -43,14 +43,16 @@ StealthTab/StealthTab/
 
 ## App Entry
 
-`StealthTabApp.swift` defines the `@main` app and creates the main `WindowGroup` with `ContentView`.
+`StealthTabApp.swift` defines the `@main` app, owns the shared `BrowserViewModel`, and creates the browser window through an AppKit `NSPanel`.
 
 It also:
 
-- Uses `.windowStyle(.hiddenTitleBar)` for the streamlined browser frame.
-- Replaces the default New command so `ContentView` can own tab creation.
+- Uses `AppDelegate` to create and show a reusable `StealthPanelController`.
+- Hosts `ContentView` in an `NSHostingView` inside a custom `StealthPanel`.
+- Creates the panel as non-activating and floating so pinned mode has the best chance of staying visible across macOS full-screen Spaces.
+- Switches to accessory activation policy while pinned, then restores regular app behavior when unpinned.
+- Replaces the default New command so menu commands can create tabs through the shared view model.
 - Adds a History menu with `Show Full History` and `Clear History...`.
-- Provides a focused scene value so menu commands can reach the active `BrowserViewModel`.
 
 ## Models
 
@@ -106,7 +108,10 @@ Window settings are persisted with `UserDefaults`:
 When a setting changes, `applyWindowSettings()` updates the live window:
 
 - `window.sharingType = .none` hides it from screen sharing/capture APIs that respect AppKit sharing type.
-- `window.level = .floating` keeps it above normal windows.
+- `window.level = .screenSaver` while pinned, then restores the original level when unpinned.
+- `window.collectionBehavior` adds `.canJoinAllSpaces`, `.fullScreenAuxiliary`, `.stationary`, and `.ignoresCycle` while pinned, so it can follow full-screen Spaces.
+- `NSApp.setActivationPolicy` uses accessory mode while pinned to behave more like an overlay utility.
+- Space-change and app-deactivation notifications re-order the pinned panel after macOS moves between desktops.
 - `window.alphaValue` controls transparency.
 - `window.backgroundColor` and `window.isOpaque` are adjusted for transparent states.
 
@@ -127,7 +132,7 @@ It:
 
 ### ContentView
 
-`ContentView` creates the `BrowserViewModel` and lays out the main browser:
+`ContentView` receives the shared `BrowserViewModel` and lays out the main browser:
 
 ```
 TabBarView
@@ -276,7 +281,7 @@ User toggles toolbar control or adjusts opacity
     ↓
 UserDefaults updates
     ↓
-NSWindow sharingType, level, alpha, opacity, and background update
+NSWindow sharingType, level, collection behavior, alpha, opacity, and background update
 ```
 
 ## Current Feature Surface

@@ -10,8 +10,12 @@ import WebKit
 import AppKit
 
 struct ContentView: View {
-    @StateObject private var viewModel = BrowserViewModel()
+    @StateObject private var viewModel: BrowserViewModel
     @FocusState private var isURLBarFocused: Bool
+
+    init(viewModel: BrowserViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -463,5 +467,5 @@ struct WindowAccessor: NSViewRepresentable {
 // MARK: - Preview
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: BrowserViewModel())
 }

@@ -9,7 +9,7 @@ Use it when you want a browser window that can stay private, stay on top, and fa
 ## What It Does
 
 - **Hide from screen sharing and recording**: Toggle capture hiding from the toolbar.
-- **Keep the browser on top**: Pin the window above normal app windows.
+- **Keep the browser on top**: Pin the window above normal app windows and full-screen Spaces where macOS allows auxiliary windows.
 - **Adjust transparency**: Fade the browser window from subtle to fully opaque.
 - **Browse normally**: Use tabs, back/forward, reload, search, and history like a lightweight browser.
 - **Stay compact**: The window can shrink down for small reference views.
@@ -27,6 +27,8 @@ Screen capture hiding uses macOS window privacy behavior. Apps that respect this
 | X on a tab | Closes that tab |
 
 At narrower window sizes, the opacity slider collapses into a compact icon. Click it to open the opacity slider in a small popover.
+
+When pinned, StealthTab uses macOS overlay-style window behavior so it can remain visible across Spaces. macOS still controls fullscreen window rules, so behavior can vary slightly by app.
 
 ## Browsing
 

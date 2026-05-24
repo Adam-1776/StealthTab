@@ -72,7 +72,7 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 
 ### 1. App/
 **Purpose**: Application lifecycle and configuration
-- `StealthTabApp.swift` - Main `@main` entry point, hidden-title-bar window setup, and History menu commands
+- `StealthTabApp.swift` - Main `@main` entry point, AppKit `NSPanel` browser window setup, and History menu commands
 
 ### 2. Models/
 **Purpose**: Data structures representing domain entities
