@@ -47,14 +47,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let browserViewModel = BrowserViewModel()
 
     private var browserWindowController: StealthPanelController?
+    private var globalHotKeyManager: GlobalHotKeyManager?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
+        globalHotKeyManager = GlobalHotKeyManager { [browserViewModel] in
+            browserViewModel.cycleWindowOpacityPreset()
+        }
+        globalHotKeyManager?.start()
         showBrowserWindow()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            showBrowserWindow()
+        }
+
+        return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        globalHotKeyManager?.stop()
     }
 
     func showBrowserWindow() {

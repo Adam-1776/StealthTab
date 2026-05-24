@@ -38,6 +38,7 @@ StealthTab/StealthTab/
 │   └── WebView.swift
 └── Utilities/
     ├── BrowserConfig.swift
+    ├── GlobalHotKeyManager.swift
     └── Utils.swift
 ```
 
@@ -114,6 +115,7 @@ When a setting changes, `applyWindowSettings()` updates the live window:
 - Space-change and app-deactivation notifications re-order the pinned panel after macOS moves between desktops.
 - `window.alphaValue` controls transparency.
 - `window.backgroundColor` and `window.isOpaque` are adjusted for transparent states.
+- Global opacity hotkeys call `cycleWindowOpacityPreset()` without requiring the app to be active.
 
 ### HistoryManager
 
@@ -213,7 +215,17 @@ It:
 - Desktop user agent.
 - Window minimums: `360` width, `600` height.
 - Minimum opacity: `0.25`.
+- Keyboard opacity presets: `0.25`, `0.5`, and `1.0`.
 - Toolbar, URL bar, and button sizing.
+
+### GlobalHotKeyManager
+
+`GlobalHotKeyManager` registers Carbon global hotkeys for opacity control:
+
+- Control+Option+Command+Down cycles to the next opacity preset.
+- Control+Option+Command+Up cycles to the next opacity preset.
+
+The hotkey callback hops back to the main actor before mutating `BrowserViewModel`.
 
 ### Utils
 

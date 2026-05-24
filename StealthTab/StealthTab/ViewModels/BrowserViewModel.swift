@@ -21,7 +21,7 @@ class BrowserViewModel: ObservableObject {
     @Published var isHiddenFromScreenCapture: Bool = UserDefaults.standard.object(forKey: BrowserPreferences.isHiddenFromScreenCapture) as? Bool ?? true {
         didSet {
             UserDefaults.standard.set(isHiddenFromScreenCapture, forKey: BrowserPreferences.isHiddenFromScreenCapture)
-            applyWindowSettings()
+            scheduleWindowSettingsApply()
         }
     }
     @Published var windowOpacity: Double = UserDefaults.standard.object(forKey: BrowserPreferences.windowOpacity) as? Double ?? 1.0 {
@@ -49,6 +49,7 @@ class BrowserViewModel: ObservableObject {
     private var defaultCollectionBehavior: NSWindow.CollectionBehavior?
     private var defaultWindowLevel: NSWindow.Level?
     private var defaultStyleMask: NSWindow.StyleMask?
+    private var lastAppliedStaysOnTopActivationState: Bool?
 
     // MARK: - Computed Properties
 
@@ -58,7 +59,7 @@ class BrowserViewModel: ObservableObject {
     }
 
     private var clampedWindowOpacity: Double {
-        min(max(windowOpacity, BrowserConfig.minimumWindowOpacity), 1.0)
+        clampedOpacity(windowOpacity)
     }
 
     // MARK: - Initialization
@@ -175,6 +176,15 @@ class BrowserViewModel: ObservableObject {
         staysOnTop.toggle()
     }
 
+    func cycleWindowOpacityPreset() {
+        let currentOpacity = clampedWindowOpacity
+        let nextOpacity = BrowserConfig.windowOpacityKeyboardPresets.first {
+            $0 > currentOpacity + 0.01
+        } ?? BrowserConfig.windowOpacityKeyboardPresets[0]
+
+        windowOpacity = nextOpacity
+    }
+
     // MARK: - URL Loading
 
     func loadURL(_ input: String) {
@@ -237,6 +247,13 @@ class BrowserViewModel: ObservableObject {
         tabObservers[tab.id] = observer
     }
 
+    private func scheduleWindowSettingsApply() {
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            self?.applyWindowSettings()
+        }
+    }
+
     private func applyWindowSettings() {
         guard let window = browserWindow else { return }
 
@@ -245,7 +262,7 @@ class BrowserViewModel: ObservableObject {
         window.styleMask = styleMask(for: window)
         window.hidesOnDeactivate = !staysOnTop
         window.level = staysOnTop ? .screenSaver : (defaultWindowLevel ?? .normal)
-        NSApp.setActivationPolicy(staysOnTop ? .accessory : .regular)
+        applyActivationPolicyIfNeeded()
 
         if staysOnTop {
             restorePinnedWindowIfNeeded()
@@ -311,6 +328,17 @@ class BrowserViewModel: ObservableObject {
         window.hidesOnDeactivate = false
         window.level = .screenSaver
         window.orderFrontRegardless()
+    }
+
+    private func applyActivationPolicyIfNeeded() {
+        guard lastAppliedStaysOnTopActivationState != staysOnTop else { return }
+
+        NSApp.setActivationPolicy(staysOnTop ? .accessory : .regular)
+        lastAppliedStaysOnTopActivationState = staysOnTop
+    }
+
+    private func clampedOpacity(_ opacity: Double) -> Double {
+        min(max(opacity, BrowserConfig.minimumWindowOpacity), 1.0)
     }
 }
 

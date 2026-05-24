@@ -26,6 +26,7 @@ StealthTab/
 │
 ├── Utilities/
 │   ├── BrowserConfig.swift          # Configuration constants
+│   ├── GlobalHotKeyManager.swift    # Global opacity keyboard shortcuts
 │   └── Utils.swift                  # Helper functions (URL parsing, etc.)
 │
 └── Assets.xcassets/                 # App icons and assets
@@ -139,6 +140,12 @@ StealthTab follows the **Model-View-ViewModel** architecture:
 - User-Agent string
 - UI measurements (sizes, spacing, padding)
 - Design tokens
+
+#### GlobalHotKeyManager.swift
+- Registers global opacity shortcuts
+- Uses Control+Option+Command+Down to cycle opacity presets
+- Uses Control+Option+Command+Up to cycle opacity presets
+- Dispatches hotkey actions back onto the main actor
 
 #### Utils.swift
 - URL parsing and validation

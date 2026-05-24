@@ -23,10 +23,13 @@ Screen capture hiding uses macOS window privacy behavior. Apps that respect this
 | Eye | Shows or hides StealthTab from screen capture |
 | Pin | Keeps the browser window above other windows |
 | Opacity slider | Adjusts the window transparency |
+| Control+Option+Command+Up or Down | Cycles opacity through 25%, 50%, and 100% |
 | Plus | Opens a new tab |
 | X on a tab | Closes that tab |
 
 At narrower window sizes, the opacity slider collapses into a compact icon. Click it to open the opacity slider in a small popover.
+
+The opacity shortcuts work globally, so you can adjust transparency while another app is active or fullscreen.
 
 When pinned, StealthTab uses macOS overlay-style window behavior so it can remain visible across Spaces. macOS still controls fullscreen window rules, so behavior can vary slightly by app.
 

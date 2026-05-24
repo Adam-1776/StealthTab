@@ -20,6 +20,7 @@ struct BrowserConfig {
     static let minimumWindowWidth: CGFloat = 360
     static let minimumWindowHeight: CGFloat = 600
     static let minimumWindowOpacity: Double = 0.25
+    static let windowOpacityKeyboardPresets: [Double] = [0.25, 0.5, 1.0]
 
     // MARK: - UI Settings
     static let toolbarSpacing: CGFloat = 12
