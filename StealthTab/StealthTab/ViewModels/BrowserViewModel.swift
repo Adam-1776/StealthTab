@@ -155,6 +155,26 @@ class BrowserViewModel: ObservableObject {
 
     // MARK: - Window Privacy
 
+    enum SnapPosition {
+        case left
+        case right
+    }
+
+    func snapWindow(to position: SnapPosition) {
+        guard let window = browserWindow, let screen = window.screen else { return }
+        var frame = window.frame
+        let visibleFrame = screen.visibleFrame
+
+        switch position {
+        case .left:
+            frame.origin.x = visibleFrame.minX
+        case .right:
+            frame.origin.x = visibleFrame.maxX - frame.width
+        }
+
+        window.setFrameOrigin(frame.origin)
+    }
+
     func attachWindow(_ window: NSWindow?) {
         guard let window = window else { return }
 

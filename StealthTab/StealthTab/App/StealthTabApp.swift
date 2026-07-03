@@ -51,8 +51,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
-        globalHotKeyManager = GlobalHotKeyManager { [browserViewModel] in
-            browserViewModel.cycleWindowOpacityPreset()
+        globalHotKeyManager = GlobalHotKeyManager { [browserViewModel] action in
+            switch action {
+            case .cycleOpacity:
+                browserViewModel.cycleWindowOpacityPreset()
+            case .snapLeft:
+                browserViewModel.snapWindow(to: .left)
+            case .snapRight:
+                browserViewModel.snapWindow(to: .right)
+            }
         }
         globalHotKeyManager?.start()
         showBrowserWindow()

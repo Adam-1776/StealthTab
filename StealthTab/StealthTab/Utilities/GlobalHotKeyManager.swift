@@ -13,6 +13,14 @@ final class GlobalHotKeyManager {
     private enum HotKey: UInt32 {
         case cycleOpacityWithDownArrow = 1
         case cycleOpacityWithUpArrow = 2
+        case snapLeftWithLeftArrow = 3
+        case snapRightWithRightArrow = 4
+    }
+
+    enum GlobalAction {
+        case cycleOpacity
+        case snapLeft
+        case snapRight
     }
 
     private static let signature: OSType = 0x53544142
@@ -40,12 +48,12 @@ final class GlobalHotKeyManager {
         return noErr
     }
 
-    private let cycleOpacity: () -> Void
+    private let actionHandler: (GlobalAction) -> Void
     private var eventHandlerRef: EventHandlerRef?
     private var hotKeyRefs: [EventHotKeyRef] = []
 
-    init(cycleOpacity: @escaping () -> Void) {
-        self.cycleOpacity = cycleOpacity
+    init(actionHandler: @escaping (GlobalAction) -> Void) {
+        self.actionHandler = actionHandler
     }
 
     func start() {
@@ -69,6 +77,8 @@ final class GlobalHotKeyManager {
 
         register(.cycleOpacityWithDownArrow, keyCode: kVK_DownArrow)
         register(.cycleOpacityWithUpArrow, keyCode: kVK_UpArrow)
+        register(.snapLeftWithLeftArrow, keyCode: kVK_LeftArrow)
+        register(.snapRightWithRightArrow, keyCode: kVK_RightArrow)
     }
 
     func stop() {
@@ -104,7 +114,14 @@ final class GlobalHotKeyManager {
     }
 
     private func handleHotKey(id: UInt32) {
-        guard HotKey(rawValue: id) != nil else { return }
-        cycleOpacity()
+        guard let hotKey = HotKey(rawValue: id) else { return }
+        switch hotKey {
+        case .cycleOpacityWithDownArrow, .cycleOpacityWithUpArrow:
+            actionHandler(.cycleOpacity)
+        case .snapLeftWithLeftArrow:
+            actionHandler(.snapLeft)
+        case .snapRightWithRightArrow:
+            actionHandler(.snapRight)
+        }
     }
 }
